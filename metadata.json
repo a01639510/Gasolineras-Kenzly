@@ -1,0 +1,9 @@
+{
+  "name": "EcoGas Manager MX",
+  "description": "Plataforma integral de gestión ambiental y cumplimiento regulatorio (ASEA/SEMARNAT) para estaciones de servicio en México con IA para reportes y COA.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "majorCapabilities": []
+}

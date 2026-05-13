@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "gasolinera": {
+      "title": "Gasolinera",
+      "description": "Estación de servicio (gasolinera) regulada.",
+      "type": "object",
+      "properties": {
+        "id_gasolinera": { "type": "string" },
+        "razon_social": { "type": "string" },
+        "rfc": { "type": "string" },
+        "nra": { "type": "string" },
+        "permiso_cre": { "type": "string" },
+        "representante_legal": { "type": "string" },
+        "responsable_tecnico": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "calle": { "type": "string" },
+        "numero_exterior": { "type": "string" },
+        "colonia": { "type": "string" },
+        "municipio": { "type": "string" },
+        "estado": { "type": "string" },
+        "cp": { "type": "string" },
+        "telefono": { "type": "string" },
+        "correo_electronico": { "type": "string" },
+        "num_trabajadores_total": { "type": "integer" },
+        "tipo_capital": { "type": "string", "enum": ["solo_nacional", "mayoria_nacional", "mayoria_extranjero", "solo_extranjero"] },
+        "status_coa": { "type": "string", "enum": ["pendiente", "presentada", "observaciones"] },
+        "fecha_dictamen_vigente": { "type": "string", "format": "date" },
+        "creador_id": { "type": "string" }
+      },
+      "required": ["razon_social", "rfc", "creador_id"]
+    },
+    "tanque": {
+      "title": "Tanque",
+      "description": "Tanque de almacenamiento de hidrocarburos.",
+      "type": "object",
+      "properties": {
+        "id_tanque": { "type": "string" },
+        "id_gasolinera": { "type": "string" },
+        "tipo_pared": { "type": "string", "enum": ["simple_pared", "doble_pared"] },
+        "material": { "type": "string", "enum": ["acero", "fibra_de_vidrio", "FRP"] },
+        "capacidad_l": { "type": "number" },
+        "anio_instalacion": { "type": "integer" },
+        "producto": { "type": "string", "enum": ["magna", "premium", "diesel"] },
+        "sistema_deteccion_fugas": { "type": "boolean" },
+        "tipo_sistema_deteccion": { "type": "string" },
+        "ultimo_mantenimiento": { "type": "string", "format": "date" },
+        "estado_operativo": { "type": "string", "enum": ["activo", "fuera_de_servicio", "en_mantenimiento"] }
+      },
+      "required": ["id_gasolinera", "capacidad_l", "producto"]
+    },
+    "pozo_monitoreo": {
+      "title": "Pozo de Monitoreo",
+      "description": "Pozo para monitoreo de agua subterránea y detección de hidrocarburos.",
+      "type": "object",
+      "properties": {
+        "id_pozo": { "type": "string" },
+        "id_gasolinera": { "type": "string" },
+        "profundidad_m": { "type": "number" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "nivel_estatico_m": { "type": "number" },
+        "presencia_hidrocarburos": { "type": "boolean" },
+        "espesor_mancha_cm": { "type": "number" },
+        "fecha_ultima_lectura": { "type": "string", "format": "date" }
+      },
+      "required": ["id_gasolinera", "id_pozo"]
+    },
+    "emision_anual": {
+      "title": "Emisión Anual",
+      "description": "Registro de emisiones a la atmósfera para la COA.",
+      "type": "object",
+      "properties": {
+        "id_emision": { "type": "string" },
+        "id_gasolinera": { "type": "string" },
+        "anio": { "type": "integer" },
+        "fuente": { "type": "string" },
+        "contaminante": { "type": "string" },
+        "cantidad_kg": { "type": "number" },
+        "metodo": { "type": "string" }
+      },
+      "required": ["id_gasolinera", "anio", "contaminante", "cantidad_kg"]
+    },
+    "residuo_peligroso": {
+      "title": "Residuo Peligroso",
+      "description": "Registro de generación y manejo de residuos peligrosos.",
+      "type": "object",
+      "properties": {
+        "id_residuo": { "type": "string" },
+        "id_gasolinera": { "type": "string" },
+        "tipo": { "type": "string" },
+        "cantidad_kg": { "type": "number" },
+        "manejo": { "type": "string" },
+        "empresa_receptora": { "type": "string" },
+        "fecha_manifiesto": { "type": "string", "format": "date" }
+      },
+      "required": ["id_gasolinera", "tipo", "cantidad_kg"]
+    },
+    "tramite": {
+      "title": "Tramite",
+      "description": "Seguimiento de trámites regulatorios.",
+      "type": "object",
+      "properties": {
+        "id_tramite": { "type": "string" },
+        "id_gasolinera": { "type": "string" },
+        "tipo": { "type": "string" },
+        "estado": { "type": "string", "enum": ["pendiente", "en_proceso", "presentado", "aprobado", "rechazado"] },
+        "fecha_vencimiento": { "type": "string", "format": "date" },
+        "folio": { "type": "string" }
+      },
+      "required": ["id_gasolinera", "tipo", "estado"]
+    }
+  },
+  "firestore": {
+    "/gasolineras/{gasolineraId}": {
+      "schema": "gasolinera",
+      "description": "Colección principal de estaciones de servicio."
+    },
+    "/gasolineras/{gasolineraId}/tanques/{tanqueId}": {
+      "schema": "tanque",
+      "description": "Subcolección de tanques por gasolinera."
+    },
+    "/gasolineras/{gasolineraId}/pozos/{pozoId}": {
+      "schema": "pozo_monitoreo",
+      "description": "Subcolección de pozos de monitoreo."
+    },
+    "/gasolineras/{gasolineraId}/emisiones/{emisionId}": {
+      "schema": "emision_anual",
+      "description": "Subcolección de registros de emisiones."
+    },
+    "/gasolineras/{gasolineraId}/residuos/{residuoId}": {
+      "schema": "residuo_peligroso",
+      "description": "Subcolección de residuos peligrosos."
+    },
+    "/gasolineras/{gasolineraId}/tramites/{tramiteId}": {
+      "schema": "tramite",
+      "description": "Subcolección de trámites regulatorios."
+    }
+  }
+}

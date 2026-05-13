@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(gasolineraId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/gasolineras/$(gasolineraId)).data.creador_id == request.auth.uid
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /gasolineras/{gasolineraId} {
+      function isValidGasolinera(data) {
+        return data.keys().hasAll(['razon_social', 'rfc', 'creador_id']) &&
+               data.razon_social is string && data.razon_social.size() <= 200 &&
+               data.rfc is string && data.rfc.size() <= 13 &&
+               data.creador_id == request.auth.uid;
+      }
+
+      allow create: if isEmailVerified() && isValidId(gasolineraId) && isValidGasolinera(request.resource.data);
+      allow read: if isSignedIn() && resource.data.creador_id == request.auth.uid;
+      allow update: if isEmailVerified() && isOwner(gasolineraId) && isValidGasolinera(request.resource.data) &&
+                      request.resource.data.creador_id == resource.data.creador_id;
+      allow delete: if isEmailVerified() && isOwner(gasolineraId);
+
+      match /{allSubcollections=**}/{docId} {
+        allow read: if isSignedIn() && isOwner(gasolineraId);
+        allow write: if isEmailVerified() && isOwner(gasolineraId);
+      }
+    }
+  }
+}
