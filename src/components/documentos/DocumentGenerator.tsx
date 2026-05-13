@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Gasolinera, Plantilla, RequerimientoDato, TipoReporte } from '../../types';
 import { PLANTILLAS_ESTANDAR, COLORES_REPORTE, ETIQUETAS_REPORTE } from '../../constants/plantillas';
-import { generateReporteAmbiental } from '../../services/geminiService';
+import { generateReporteAmbiental, FALLBACK_MARKER } from '../../services/geminiService';
 import { resolverReportesAplicables } from '../../services/reportResolver';
 import { cn } from '../../lib/utils';
 import { saveAs } from 'file-saver';
@@ -41,7 +41,7 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedDocs, setGeneratedDocs] = useState<{ name: string; content: string }[]>([]);
+  const [generatedDocs, setGeneratedDocs] = useState<{ name: string; content: string; isFallback?: boolean }[]>([]);
   const [showMissingForm, setShowMissingForm] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -88,10 +88,13 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
 
         if (i > 0) await new Promise(r => setTimeout(r, INTER_REQUEST_DELAY_MS));
 
-        const content = await generateReporteAmbiental(selectedTemplate.id as TipoReporte, gas);
+        const raw = await generateReporteAmbiental(selectedTemplate.id as TipoReporte, gas);
+        const isFallback = raw.startsWith(FALLBACK_MARKER);
+        const content = isFallback ? raw.slice(FALLBACK_MARKER.length) : raw;
         docs.push({
-          name: `${ETIQUETAS_REPORTE[selectedTemplate.id] ?? selectedTemplate.nombre}_${gas.razon_social.replace(/\s+/g, '_')}.docx`,
+          name: `${isFallback ? 'BORRADOR_' : ''}${ETIQUETAS_REPORTE[selectedTemplate.id] ?? selectedTemplate.nombre}_${gas.razon_social.replace(/\s+/g, '_')}.docx`,
           content,
+          isFallback,
         });
         setGenerationProgress(Math.round(((i + 1) / selectedGasIds.length) * 100));
       }
@@ -489,6 +492,16 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
               </button>
             </div>
 
+            {generatedDocs.some(d => d.isFallback) && (
+              <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <AlertCircle size={16} color="var(--warning)" style={{ flexShrink: 0, marginTop: 2 }} />
+                <p style={{ fontSize: 12, color: 'var(--warning)', margin: 0, lineHeight: 1.6 }}>
+                  <strong>Cuota API agotada.</strong> Los documentos marcados con "BORRADOR_" contienen la estructura y datos reales pero sin redacción por IA.
+                  Activa facturación en <strong>aistudio.google.com</strong> o espera al restablecimiento de cuota (medianoche hora del Pacífico) y regenera.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {generatedDocs.map((doc, idx) => (
                 <div
@@ -504,9 +517,14 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
                       <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 3px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {doc.name}
                       </p>
-                      <p className="font-mono-kenzly" style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>
+                      <p className="font-mono-kenzly" style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 4px' }}>
                         DOCX · ~{Math.max(1, Math.round(doc.content.length / 1024))} KB
                       </p>
+                      {doc.isFallback && (
+                        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(245,158,11,0.12)', color: 'var(--warning)', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                          Borrador sin IA
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
