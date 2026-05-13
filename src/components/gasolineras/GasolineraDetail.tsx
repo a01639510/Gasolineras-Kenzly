@@ -1,588 +1,605 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  Container, 
-  Droplets, 
-  Activity, 
-  Plus,
-  ShieldCheck,
-  FileText,
-  AlertTriangle,
-  ChevronRight,
-  TrendingUp,
-  Search,
-  MapPin
+import {
+  ArrowLeft, Container, Droplets, Activity, Plus,
+  ShieldCheck, FileText, AlertTriangle, ChevronRight,
+  MapPin, X, CheckCircle2, Clock, ExternalLink,
 } from 'lucide-react';
-import { Gasolinera, Tanque, PozoMonitoreo, Tramite } from '../../types';
+import { Gasolinera, Tanque, PozoMonitoreo, Tramite, TipoProyecto } from '../../types';
 import { db, auth } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, doc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, addDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../../lib/utils';
+import { resolverReportesAplicables, etiquetaReporte } from '../../services/reportResolver';
+import { COLORES_REPORTE } from '../../constants/plantillas';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+enum OperationType { GET = 'get', WRITE = 'write' }
+
+function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
+  console.error('Firestore Error:', { error: error instanceof Error ? error.message : String(error), op, path });
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-}
-
-interface GasolineraDetailProps {
+interface Props {
   gasId: string;
   gasolinera?: Gasolinera;
   onBack: () => void;
 }
 
-export default function GasolineraDetail({ gasId, gasolinera: initialGasolinera, onBack }: GasolineraDetailProps) {
-  const [activeTab, setActiveTab] = useState<'infra' | 'env' | 'docs' | 'safety'>('infra');
+const TIPOS_PROYECTO: { value: TipoProyecto; label: string }[] = [
+  { value: 'gasolinera_petroliferos', label: 'Gasolinera (Diésel / Gasolina)' },
+  { value: 'gas_lp_carburacion',      label: 'Estación de Gas LP — Carburación' },
+  { value: 'gas_lp_publico',          label: 'Estación de Gas LP — Expendio Público' },
+  { value: 'autoconsumo',             label: 'Autoconsumo' },
+];
+
+export default function GasolineraDetail({ gasId, gasolinera: initialGas, onBack }: Props) {
+  const [activeTab, setActiveTab] = useState<'infra' | 'env' | 'docs'>('infra');
   const [tanques, setTanques] = useState<Tanque[]>([]);
-  const [pozos, setPozos] = useState<PozoMonitoreo[]>([]);
+  const [pozos, setPozos]   = useState<PozoMonitoreo[]>([]);
   const [tramites, setTramites] = useState<Tramite[]>([]);
-  
-  // Modals/Forms state
   const [showAddTanque, setShowAddTanque] = useState(false);
-  const [showAddPozo, setShowAddPozo] = useState(false);
+  const [showAddPozo, setShowAddPozo]   = useState(false);
+  const isNew = gasId === 'new';
 
-  // Creation state
-  const [isCreating, setIsCreating] = useState(gasId === 'new');
-  const [newGas, setNewGas] = useState<Partial<Gasolinera>>({
-    razon_social: '',
-    rfc: '',
-    municipio: '',
-    estado: '',
-    lat: 19.4326,
-    lng: -99.1332,
-    creador_id: auth.currentUser?.uid || ''
+  // Form state for new gasolinera
+  const [form, setForm] = useState<Partial<Gasolinera>>({
+    razon_social: '', rfc: '', municipio: '', estado: '',
+    lat: 19.4326, lng: -99.1332, creador_id: auth.currentUser?.uid || '',
+    tipo_proyecto: 'gasolinera_petroliferos',
+    esta_en_anp: false, esta_en_ramsar: false, requiere_remocion_vegetacion: false,
   });
+  const setF = (k: keyof Gasolinera, v: any) => setForm(p => ({ ...p, [k]: v }));
 
-  // Sub-record forms
   const [newTanque, setNewTanque] = useState<Partial<Tanque>>({
-    producto: 'magna',
-    capacidad_l: 40000,
-    tipo_pared: 'doble_pared',
-    material: 'acero',
-    anio_instalacion: new Date().getFullYear(),
-    estado_operativo: 'activo',
-    sistema_deteccion_fugas: true
+    producto: 'magna', capacidad_l: 40000, tipo_pared: 'doble_pared',
+    material: 'acero', anio_instalacion: new Date().getFullYear(),
+    estado_operativo: 'activo', sistema_deteccion_fugas: true,
   });
-
   const [newPozo, setNewPozo] = useState<Partial<PozoMonitoreo>>({
-    profundidad_m: 15,
-    presencia_hidrocarburos: false,
-    lat: 0,
-    lng: 0
+    profundidad_m: 15, presencia_hidrocarburos: false, lat: 0, lng: 0,
   });
 
   useEffect(() => {
-    if (!gasId || gasId === 'new') return;
-    
-    const tanksPath = `gasolineras/${gasId}/tanques`;
-    const unsubTanques = onSnapshot(collection(db, tanksPath), (snap) => {
-      setTanques(snap.docs.map(d => ({ id: d.id, ...d.data() } as Tanque)));
-    }, (error) => handleFirestoreError(error, OperationType.GET, tanksPath));
+    if (isNew) return;
+    const unsubs = [
+      onSnapshot(collection(db, `gasolineras/${gasId}/tanques`),
+        s => setTanques(s.docs.map(d => ({ id: d.id, ...d.data() } as Tanque))),
+        e => handleFirestoreError(e, OperationType.GET, `gasolineras/${gasId}/tanques`)),
+      onSnapshot(collection(db, `gasolineras/${gasId}/pozos`),
+        s => setPozos(s.docs.map(d => ({ id: d.id, ...d.data() } as PozoMonitoreo))),
+        e => handleFirestoreError(e, OperationType.GET, `gasolineras/${gasId}/pozos`)),
+      onSnapshot(collection(db, `gasolineras/${gasId}/tramites`),
+        s => setTramites(s.docs.map(d => ({ id: d.id, ...d.data() } as Tramite))),
+        e => handleFirestoreError(e, OperationType.GET, `gasolineras/${gasId}/tramites`)),
+    ];
+    return () => unsubs.forEach(u => u());
+  }, [gasId, isNew]);
 
-    const wellsPath = `gasolineras/${gasId}/pozos`;
-    const unsubPozos = onSnapshot(collection(db, wellsPath), (snap) => {
-      setPozos(snap.docs.map(d => ({ id: d.id, ...d.data() } as PozoMonitoreo)));
-    }, (error) => handleFirestoreError(error, OperationType.GET, wellsPath));
-
-    const appsPath = `gasolineras/${gasId}/tramites`;
-    const unsubTramites = onSnapshot(collection(db, appsPath), (snap) => {
-      setTramites(snap.docs.map(d => ({ id: d.id, ...d.data() } as Tramite)));
-    }, (error) => handleFirestoreError(error, OperationType.GET, appsPath));
-
-    return () => {
-      unsubTanques();
-      unsubPozos();
-      unsubTramites();
-    };
-  }, [gasId]);
-
-  const handleCreateGasolinera = async () => {
-    if (!newGas.razon_social || !newGas.rfc) return;
+  const handleCreate = async () => {
+    if (!form.razon_social || !form.rfc) return;
+    const id = form.rfc!.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.random().toString(36).slice(2, 7);
+    const reportes = resolverReportesAplicables(form as Gasolinera);
+    const data = { ...form, id, creador_id: auth.currentUser?.uid, reportes_aplicables: reportes } as Gasolinera;
     try {
-      const id = newGas.rfc.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.random().toString(36).slice(2, 7);
-      const gasData = { ...newGas, id, creador_id: auth.currentUser?.uid } as Gasolinera;
-      await setDoc(doc(db, 'gasolineras', id), gasData);
+      await setDoc(doc(db, 'gasolineras', id), data);
       onBack();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'gasolineras');
-    }
+    } catch (e) { handleFirestoreError(e, OperationType.WRITE, 'gasolineras'); }
   };
 
   const handleAddTanque = async () => {
-    if (!gasId || gasId === 'new') return;
     try {
-      const tanksPath = `gasolineras/${gasId}/tanques`;
-      await addDoc(collection(db, tanksPath), { ...newTanque, id_gasolinera: gasId });
+      await addDoc(collection(db, `gasolineras/${gasId}/tanques`), { ...newTanque, id_gasolinera: gasId });
       setShowAddTanque(false);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `gasolineras/${gasId}/tanques`);
-    }
+    } catch (e) { handleFirestoreError(e, OperationType.WRITE, `gasolineras/${gasId}/tanques`); }
   };
 
   const handleAddPozo = async () => {
-    if (!gasId || gasId === 'new') return;
     try {
-      const wellsPath = `gasolineras/${gasId}/pozos`;
-      await addDoc(collection(db, wellsPath), { ...newPozo, id_gasolinera: gasId });
+      await addDoc(collection(db, `gasolineras/${gasId}/pozos`), { ...newPozo, id_gasolinera: gasId });
       setShowAddPozo(false);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `gasolineras/${gasId}/pozos`);
-    }
+    } catch (e) { handleFirestoreError(e, OperationType.WRITE, `gasolineras/${gasId}/pozos`); }
   };
 
-  if (isCreating) {
+  // ── FORM DE NUEVA GASOLINERA ──────────────────────────────────────────────
+  if (isNew) {
     return (
-      <div className="max-w-2xl mx-auto space-y-8">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full text-slate-400">
-            <ArrowLeft size={24} />
+      <div style={{ maxWidth: 780, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 6 }}>
+            <ArrowLeft size={22} />
           </button>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Nueva Estación</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Nueva Estación</h2>
         </div>
 
-        <div className="glass-card p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField label="Razón Social" value={newGas.razon_social || ''} onChange={v => setNewGas({...newGas, razon_social: v})} />
-            <FormField label="RFC" value={newGas.rfc || ''} onChange={v => setNewGas({...newGas, rfc: v})} />
-            <FormField label="Municipio" value={newGas.municipio || ''} onChange={v => setNewGas({...newGas, municipio: v})} />
-            <FormField label="Estado" value={newGas.estado || ''} onChange={v => setNewGas({...newGas, estado: v})} />
+        <div className="glass-card" style={{ padding: 32 }}>
+          <SectionTitle>Datos del Promovente</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+            <FormField label="Razón Social *" value={form.razon_social || ''} onChange={v => setF('razon_social', v)} />
+            <FormField label="RFC *" value={form.rfc || ''} onChange={v => setF('rfc', v.toUpperCase())} />
+            <FormField label="Representante Legal" value={form.representante_legal || ''} onChange={v => setF('representante_legal', v)} />
+            <FormField label="Correo electrónico" value={form.correo_electronico || ''} onChange={v => setF('correo_electronico', v)} />
+            <FormField label="Teléfono" value={form.telefono || ''} onChange={v => setF('telefono', v)} />
+            <FormField label="NRA (si ya existe)" value={form.nra || ''} onChange={v => setF('nra', v)} />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <FormField label="Domicilio para notificaciones" value={form.domicilio_notificaciones || ''} onChange={v => setF('domicilio_notificaciones', v)} />
+            </div>
           </div>
 
-          <div className="pt-6 flex justify-end gap-4 border-t border-white/5">
+          <SectionTitle>Ubicación de la Instalación</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 28 }}>
+            <FormField label="Calle" value={form.calle || ''} onChange={v => setF('calle', v)} />
+            <FormField label="Número exterior" value={form.numero_exterior || ''} onChange={v => setF('numero_exterior', v)} />
+            <FormField label="Colonia / Fraccionamiento" value={form.colonia || ''} onChange={v => setF('colonia', v)} />
+            <FormField label="Código Postal" value={form.cp || ''} onChange={v => setF('cp', v)} />
+            <FormField label="Municipio *" value={form.municipio || ''} onChange={v => setF('municipio', v)} />
+            <FormField label="Estado *" value={form.estado || ''} onChange={v => setF('estado', v)} />
+            <FormField label="Superficie total (m²)" type="number" value={String(form.superficie_total_m2 || '')} onChange={v => setF('superficie_total_m2', Number(v))} />
+            <FormField label="Superficie utilizada (m²)" type="number" value={String(form.superficie_utilizada_m2 || '')} onChange={v => setF('superficie_utilizada_m2', Number(v))} />
+          </div>
+
+          <SectionTitle>Tipo de Proyecto</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>
+                Tipo de actividad *
+              </label>
+              <select
+                className="glass-input"
+                style={{ width: '100%', color: 'var(--text-primary)', appearance: 'none', background: 'var(--bg-surface)' }}
+                value={form.tipo_proyecto || ''}
+                onChange={e => setF('tipo_proyecto', e.target.value as TipoProyecto)}
+              >
+                {TIPOS_PROYECTO.map(t => (
+                  <option key={t.value} value={t.value} style={{ background: '#060912' }}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <FormField label="Capacidad total almacenamiento (L)" type="number" value={String(form.capacidad_almacenamiento_litros || '')} onChange={v => setF('capacidad_almacenamiento_litros', Number(v))} />
+            <FormField label="Número de tanques" type="number" value={String(form.numero_tanques_total || '')} onChange={v => setF('numero_tanques_total', Number(v))} />
+            <FormField label="Número de trabajadores" type="number" value={String(form.num_trabajadores_total || '')} onChange={v => setF('num_trabajadores_total', Number(v))} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 24, marginBottom: 28 }}>
+            <CheckboxField label="¿Está en Área Natural Protegida (ANP)?" checked={form.esta_en_anp || false} onChange={v => setF('esta_en_anp', v)} />
+            <CheckboxField label="¿Está en sitio RAMSAR?" checked={form.esta_en_ramsar || false} onChange={v => setF('esta_en_ramsar', v)} />
+            <CheckboxField label="¿Requiere remoción de vegetación forestal?" checked={form.requiere_remocion_vegetacion || false} onChange={v => setF('requiere_remocion_vegetacion', v)} />
+          </div>
+
+          {/* Preview de reportes que aplican */}
+          {form.tipo_proyecto && (form.capacidad_almacenamiento_litros ?? 0) > 0 && (
+            <div style={{ background: 'var(--primary-dim)', border: '1px solid rgba(26,109,255,0.25)', borderRadius: 10, padding: '14px 18px', marginBottom: 24 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 8px' }}>
+                Reportes que aplican automáticamente
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {resolverReportesAplicables(form as Gasolinera).map(r => {
+                  const col = COLORES_REPORTE[r];
+                  return (
+                    <span key={r} style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 6, background: col.bg, color: col.text, border: `1px solid ${col.border}`, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      {etiquetaReporte(r)}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 20, borderTop: '1px solid var(--border-glass)' }}>
             <button onClick={onBack} className="btn-secondary">Cancelar</button>
-            <button onClick={handleCreateGasolinera} className="btn-primary">Registrar Estación</button>
+            <button onClick={handleCreate} className="btn-primary">Registrar Estación</button>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!initialGasolinera) return null;
-  const gasolinera = initialGasolinera;
+  if (!initialGas) return null;
+  const gas = initialGas;
+  const reportes = gas.reportes_aplicables ?? resolverReportesAplicables(gas);
+  const capacidadTotal = tanques.reduce((s, t) => s + t.capacidad_l, 0);
 
+  // Alertas reales derivadas de datos
+  const alertas: string[] = [];
+  if (!gas.nra) alertas.push('NRA no registrado');
+  if (!gas.representante_legal) alertas.push('Representante legal no capturado');
+  if (!gas.capacidad_almacenamiento_litros) alertas.push('Capacidad de almacenamiento sin registrar');
+  if (gas.status_coa === 'pendiente') alertas.push('COA en estatus pendiente — verificar plazo');
+  if (tramites.length === 0) alertas.push('Sin trámites registrados — generar reporte desde Machotes');
+
+  // ── VISTA DETALLE ─────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 pb-20">
-      {/* Modals */}
+    <div style={{ paddingBottom: 80 }}>
       <AnimatePresence>
         {showAddTanque && (
-          <Modal title="Agregar Tanque de Almacenamiento" onClose={() => setShowAddTanque(false)}>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <SelectField label="Producto" value={newTanque.producto} options={['magna', 'premium', 'diesel']} onChange={v => setNewTanque({...newTanque, producto: v as any})} />
-              <FormField label="Capacidad (L)" type="number" value={String(newTanque.capacidad_l)} onChange={v => setNewTanque({...newTanque, capacidad_l: Number(v)})} />
-              <SelectField label="Pared" value={newTanque.tipo_pared} options={['simple_pared', 'doble_pared']} onChange={v => setNewTanque({...newTanque, tipo_pared: v as any})} />
-              <FormField label="Año Instalación" type="number" value={String(newTanque.anio_instalacion)} onChange={v => setNewTanque({...newTanque, anio_instalacion: Number(v)})} />
+          <Modal title="Vincular Tanque de Almacenamiento" onClose={() => setShowAddTanque(false)}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <SelectField label="Producto" value={newTanque.producto} options={['magna', 'premium', 'diesel', 'gas_lp']} onChange={v => setNewTanque({ ...newTanque, producto: v as any })} />
+              <FormField label="Capacidad (L)" type="number" value={String(newTanque.capacidad_l)} onChange={v => setNewTanque({ ...newTanque, capacidad_l: Number(v) })} />
+              <SelectField label="Tipo de pared" value={newTanque.tipo_pared} options={['simple_pared', 'doble_pared']} onChange={v => setNewTanque({ ...newTanque, tipo_pared: v as any })} />
+              <SelectField label="Material" value={newTanque.material} options={['acero', 'fibra_de_vidrio', 'FRP']} onChange={v => setNewTanque({ ...newTanque, material: v as any })} />
+              <FormField label="Año instalación" type="number" value={String(newTanque.anio_instalacion)} onChange={v => setNewTanque({ ...newTanque, anio_instalacion: Number(v) })} />
+              <SelectField label="Estado operativo" value={newTanque.estado_operativo} options={['activo', 'fuera_de_servicio', 'en_mantenimiento']} onChange={v => setNewTanque({ ...newTanque, estado_operativo: v as any })} />
             </div>
-            <button onClick={handleAddTanque} className="btn-primary w-full">Vincular Tanque</button>
+            <button onClick={handleAddTanque} className="btn-primary" style={{ width: '100%' }}>Vincular Tanque</button>
           </Modal>
         )}
-
         {showAddPozo && (
           <Modal title="Agregar Pozo de Monitoreo" onClose={() => setShowAddPozo(false)}>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <FormField label="Profundidad (m)" type="number" value={String(newPozo.profundidad_m)} onChange={v => setNewPozo({...newPozo, profundidad_m: Number(v)})} />
-              <SelectField label="Presencia HC" value={newPozo.presencia_hidrocarburos ? 'SI' : 'NO'} options={['SI', 'NO']} onChange={v => setNewPozo({...newPozo, presencia_hidrocarburos: v === 'SI'})} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <FormField label="Profundidad (m)" type="number" value={String(newPozo.profundidad_m)} onChange={v => setNewPozo({ ...newPozo, profundidad_m: Number(v) })} />
+              <SelectField label="Presencia de HC" value={newPozo.presencia_hidrocarburos ? 'SI' : 'NO'} options={['SI', 'NO']} onChange={v => setNewPozo({ ...newPozo, presencia_hidrocarburos: v === 'SI' })} />
             </div>
-            <button onClick={handleAddPozo} className="btn-primary w-full">Agregar Pozo</button>
+            <button onClick={handleAddPozo} className="btn-primary" style={{ width: '100%' }}>Agregar Pozo</button>
           </Modal>
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-4">
-        <button 
-          onClick={onBack}
-          className="p-2 hover:bg-white/5 rounded-full transition-colors text-slate-400 hover:text-white"
-        >
-          <ArrowLeft size={24} />
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 24 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 6, marginTop: 2 }}>
+          <ArrowLeft size={20} />
         </button>
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">{gasolinera.razon_social}</h2>
-          <div className="flex items-center gap-2 text-xs text-slate-500 uppercase font-bold tracking-widest">
-            <MapPinIcon size={12} /> {gasolinera.municipio}, {gasolinera.estado}
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 4px', letterSpacing: '-0.3px' }}>
+            {gas.razon_social}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+            <MapPin size={12} />
+            {gas.municipio && gas.estado ? `${gas.municipio}, ${gas.estado}` : 'Ubicación no registrada'}
           </div>
         </div>
-
-        <div className="ml-auto flex gap-3">
-          <button 
-            onClick={() => alert('Ficha descargada en formato PDF.')}
-            className="btn-secondary flex items-center gap-2 text-sm px-4"
-          >
-            <FileText size={16} /> Descargar Ficha
-          </button>
-          <button 
-            onClick={() => {
-              setActiveTab('infra');
-              setShowAddTanque(true);
-            }}
-            className="btn-primary flex items-center gap-2 text-sm px-4"
-          >
-            <Plus size={16} /> Agregar Registro
-          </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {reportes.map(r => {
+            const col = COLORES_REPORTE[r];
+            return (
+              <span key={r} style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 6, background: col.bg, color: col.text, border: `1px solid ${col.border}`, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                {etiquetaReporte(r)}
+              </span>
+            );
+          })}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-white/5 rounded-2xl w-fit border border-white/5">
-        <TabButton icon={<Container size={18}/>} label="Infraestructura" active={activeTab === 'infra'} onClick={() => setActiveTab('infra')} />
-        <TabButton icon={<Activity size={18}/>} label="Monitoreo" active={activeTab === 'env'} onClick={() => setActiveTab('env')} />
-        <TabButton icon={<FileText size={18}/>} label="Trámites/COA" active={activeTab === 'docs'} onClick={() => setActiveTab('docs')} />
-        <TabButton icon={<ShieldCheck size={18}/>} label="Seguridad/SASH" active={activeTab === 'safety'} onClick={() => setActiveTab('safety')} />
+      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg-surface)', borderRadius: 14, width: 'fit-content', border: '1px solid var(--border-glass)', marginBottom: 28 }}>
+        <TabBtn icon={<Container size={16} />} label="Infraestructura" active={activeTab === 'infra'} onClick={() => setActiveTab('infra')} />
+        <TabBtn icon={<Activity size={16} />} label="Monitoreo Ambiental" active={activeTab === 'env'} onClick={() => setActiveTab('env')} />
+        <TabBtn icon={<FileText size={16} />} label="Trámites / COA" active={activeTab === 'docs'} onClick={() => setActiveTab('docs')} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+        {/* Main */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
           {activeTab === 'infra' && (
-            <div className="space-y-6">
-              <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-lg">Tanques de Almacenamiento (TAS)</h3>
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500">NOM-005-ASEA-2016</div>
+            <>
+              {/* Tanques */}
+              <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 2px' }}>
+                      Tanques de Almacenamiento (TAS)
+                    </h3>
+                    <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>NOM-005-ASEA-2016</p>
+                  </div>
+                  {capacidadTotal > 0 && (
+                    <span className="font-mono-kenzly" style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>
+                      {capacidadTotal.toLocaleString()} L total
+                    </span>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {tanques.map(tanque => (
-                    <div key={tanque.id} className="glass-card p-5 hover:border-white/20 transition-all border border-white/5">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className={cn(
-                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
-                          tanque.producto === 'magna' ? "bg-green-500/10 text-green-500" :
-                          tanque.producto === 'premium' ? "bg-red-500/10 text-red-500" : "bg-black text-white border border-white/20"
-                        )}>
-                          {tanque.producto}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                  {tanques.map(t => {
+                    const colores: Record<string, string> = { magna: 'var(--success)', premium: 'var(--danger)', diesel: 'var(--accent)', gas_lp: 'var(--primary)' };
+                    return (
+                      <div key={t.id} className="glass-card" style={{ padding: 18 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-surface-hover)', color: colores[t.producto] ?? 'var(--text-primary)', textTransform: 'uppercase' }}>
+                            {t.producto}
+                          </span>
+                          <span className="font-mono-kenzly" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {t.capacidad_l.toLocaleString()} L
+                          </span>
                         </div>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{tanque.capacidad_l.toLocaleString()} L</span>
+                        <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 2px' }}>
+                          {t.tipo_pared.replace('_', ' ')}
+                        </p>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>{t.material} • {t.anio_instalacion}</p>
+                        <div style={{ marginTop: 10, padding: '4px 0', borderTop: '1px solid var(--border-glass)' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: t.estado_operativo === 'activo' ? 'var(--success)' : 'var(--warning)', textTransform: 'uppercase' }}>
+                            {t.estado_operativo.replace('_', ' ')}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <p className="text-xl font-bold text-white mb-1">{tanque.tipo_pared.replace('_', ' ')}</p>
-                          <p className="text-xs text-slate-500">{tanque.material}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] text-slate-600 uppercase mb-1">Instalación</p>
-                          <p className="text-xs font-bold text-slate-300">{tanque.anio_instalacion}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button 
+                    );
+                  })}
+                  <button
                     onClick={() => setShowAddTanque(true)}
-                    className="glass-card border-dashed p-8 flex flex-col items-center justify-center gap-2 group hover:border-cyan-500/50 transition-all border border-white/5"
+                    className="glass-card"
+                    style={{ padding: 18, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', border: '1px dashed var(--border-glass)', background: 'transparent', minHeight: 110 }}
+                    onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--primary)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-glass)'}
                   >
-                    <div className="p-3 bg-white/5 rounded-full text-slate-500 group-hover:text-cyan-400 group-hover:bg-cyan-500/10 transition-all">
-                      <Plus size={24} />
-                    </div>
-                    <span className="text-sm font-medium text-slate-500">Vincular Tanque</span>
+                    <Plus size={20} color="var(--text-muted)" />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Vincular Tanque</span>
                   </button>
                 </div>
               </section>
 
-              <section className="space-y-4">
-                <h3 className="font-bold text-white text-lg">Sistema de Recuperación de Vapores (SRV)</h3>
-                <div className="glass-card p-6 border border-white/5">
-                  <div className="flex items-center gap-6">
-                    <div className="p-4 bg-cyan-500/10 rounded-2xl">
-                      <Activity className="text-cyan-500" size={32} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-2">
-                        <span className="text-sm text-slate-400">Eficiencia Certificada</span>
-                        <span className="text-sm font-bold text-white">92.4%</span>
-                      </div>
-                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: '92.4%' }}
-                          className="bg-cyan-500 h-full rounded-full"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-slate-600 uppercase mb-1">Última Prueba</p>
-                      <p className="text-xs font-bold text-slate-300">14 Mar 2026</p>
-                    </div>
+              {/* Info técnica */}
+              {gas.capacidad_almacenamiento_litros && (
+                <div className="glass-card" style={{ padding: 20 }}>
+                  <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 14px' }}>
+                    Datos Técnicos del Proyecto
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                    <KPISmall label="Capacidad total" value={`${gas.capacidad_almacenamiento_litros.toLocaleString()} L`} />
+                    {gas.superficie_total_m2 && <KPISmall label="Superficie predio" value={`${gas.superficie_total_m2} m²`} />}
+                    {gas.num_trabajadores_total && <KPISmall label="Trabajadores" value={String(gas.num_trabajadores_total)} />}
                   </div>
                 </div>
-              </section>
-            </div>
+              )}
+            </>
           )}
 
           {activeTab === 'env' && (
-            <div className="space-y-6">
-              <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-lg">Pozos de Monitoreo</h3>
-                  <button 
+            <>
+              <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+                    Pozos de Monitoreo
+                  </h3>
+                  <button
                     onClick={() => setShowAddPozo(true)}
-                    className="text-xs text-cyan-500 font-bold hover:underline"
+                    style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}
                   >
                     + Agregar Pozo
                   </button>
                 </div>
-                <div className="space-y-3">
-                  {pozos.map(pozo => (
-                    <div key={pozo.id} className="glass-card p-4 flex items-center justify-between border border-white/5">
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "p-2 rounded-lg",
-                          pozo.presencia_hidrocarburos ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500"
-                        )}>
-                          <Droplets size={20} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-white">Pozo {pozo.id}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Profundidad: {pozo.profundidad_m}m</p>
-                        </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pozos.map(p => (
+                    <div key={p.id} className="glass-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ padding: 8, borderRadius: 8, background: p.presencia_hidrocarburos ? 'var(--danger-dim)' : 'var(--success-dim)' }}>
+                        <Droplets size={18} color={p.presencia_hidrocarburos ? 'var(--danger)' : 'var(--success)'} />
                       </div>
-                      <div className="grid grid-cols-2 gap-8 text-right">
-                        <div>
-                          <p className="text-[10px] text-slate-600 uppercase mb-0.5">Nivel Estático</p>
-                          <p className="text-sm font-bold text-slate-300">{pozo.nivel_estatico_m || '--'} m</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-slate-600 uppercase mb-0.5">Fase Libre</p>
-                          <p className={cn(
-                            "text-sm font-bold",
-                            pozo.presencia_hidrocarburos ? "text-red-500" : "text-green-500"
-                          )}>
-                            {pozo.presencia_hidrocarburos ? `${pozo.espesor_mancha_cm} cm` : 'Negativo'}
-                          </p>
-                        </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px' }}>Pozo {p.id.slice(-4)}</p>
+                        <p className="font-mono-kenzly" style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                          Prof. {p.profundidad_m} m {p.nivel_estatico_m ? `• NE ${p.nivel_estatico_m} m` : ''}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: p.presencia_hidrocarburos ? 'var(--danger)' : 'var(--success)', margin: 0 }}>
+                          {p.presencia_hidrocarburos ? `Positivo — ${p.espesor_mancha_cm ?? '?'} cm` : 'Negativo'}
+                        </p>
+                        {p.fecha_ultima_lectura && (
+                          <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '2px 0 0' }}>{p.fecha_ultima_lectura}</p>
+                        )}
                       </div>
                     </div>
                   ))}
                   {pozos.length === 0 && (
-                    <div className="glass-card p-12 text-center text-slate-500 italic border-dashed border border-white/5">
-                      No hay pozos registrados para esta estación.
+                    <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 13, borderStyle: 'dashed' }}>
+                      Sin pozos registrados para esta estación.
                     </div>
                   )}
                 </div>
               </section>
 
-              <section className="glass-card p-6 border border-white/5">
-                <div className="flex items-center gap-3 mb-6">
-                  <TrendingUp className="text-cyan-500" size={20} />
-                  <h3 className="font-bold text-white">Historial de Emisiones (COV)</h3>
+              {/* Flags ambientales */}
+              <div className="glass-card" style={{ padding: 20 }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 14px' }}>
+                  Flags Ambientales (determinan tipo de reporte)
+                </h3>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <FlagBadge label="Área Natural Protegida" active={gas.esta_en_anp ?? false} />
+                  <FlagBadge label="Sitio RAMSAR" active={gas.esta_en_ramsar ?? false} />
+                  <FlagBadge label="Remoción Forestal" active={gas.requiere_remocion_vegetacion ?? false} />
                 </div>
-                <div className="h-48 flex items-end gap-2 px-2">
-                  {[45, 62, 58, 70, 85, 40, 52, 60, 65, 72, 80, 55].map((val, i) => (
-                    <div key={i} className="flex-1 space-y-2">
-                      <motion.div 
-                        initial={{ height: 0 }}
-                        animate={{ height: `${val}%` }}
-                        className="bg-cyan-500/20 hover:bg-cyan-500/40 border-t-2 border-cyan-500 transition-colors rounded-t"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between mt-4 text-[10px] text-slate-600 uppercase font-bold tracking-widest">
-                  <span>Ene</span>
-                  <span>Dic</span>
-                </div>
-              </section>
-            </div>
+              </div>
+            </>
           )}
 
           {activeTab === 'docs' && (
-            <div className="space-y-6">
-              <section className="space-y-4">
-                <h3 className="font-bold text-white text-lg">Estatus Regulatorio Anual</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <StatusCard 
-                    label="COA (Año anterior)" 
-                    status="Cerrada" 
-                    date="Presentada 24/05/2026" 
-                    color="green" 
-                  />
-                  <StatusCard 
-                    label="Dictamen NOM-005" 
-                    status="Vigente" 
-                    date="Vence 31/12/2026" 
-                    color="blue" 
-                  />
-                  <StatusCard 
-                    label="MIA / Informe Prev." 
-                    status="Autorizado" 
-                    date="Oficial ASEA-0021" 
-                    color="cyan" 
-                  />
-                  <StatusCard 
-                    label="Prueba SRV" 
-                    status="Vencida" 
-                    date="Hace 12 días" 
-                    color="red" 
-                  />
-                </div>
+            <>
+              <section>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 14px' }}>
+                  Trámites Registrados
+                </h3>
+                {tramites.length > 0 ? (
+                  <div className="glass-card" style={{ overflow: 'hidden' }}>
+                    {tramites.map((tr, i) => {
+                      const col = COLORES_REPORTE[tr.tipo] ?? COLORES_REPORTE['MISSE_FormatoA'];
+                      const estadoColor: Record<string, string> = {
+                        aprobado: 'var(--success)', pendiente: 'var(--warning)',
+                        en_proceso: 'var(--primary)', presentado: 'var(--accent)', rechazado: 'var(--danger)',
+                      };
+                      return (
+                        <div key={tr.id} style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: i < tramites.length - 1 ? '1px solid var(--border-glass)' : 'none' }}>
+                          <div style={{ padding: 8, borderRadius: 8, background: col.bg, border: `1px solid ${col.border}`, flexShrink: 0 }}>
+                            <FileText size={16} color={col.text} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px' }}>{tr.tipo}</p>
+                            {tr.fecha_generacion && (
+                              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Generado: {tr.fecha_generacion}</p>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: estadoColor[tr.estado] ?? 'var(--text-muted)', textTransform: 'uppercase' }}>
+                            {tr.estado}
+                          </span>
+                          {tr.folio && (
+                            <span className="font-mono-kenzly" style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tr.folio}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="glass-card" style={{ padding: 40, textAlign: 'center', borderStyle: 'dashed' }}>
+                    <FileText size={32} color="var(--text-muted)" style={{ margin: '0 auto 12px', display: 'block' }} />
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 4px' }}>Sin trámites registrados</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, opacity: 0.7 }}>
+                      Genera reportes desde la sección Machotes
+                    </p>
+                  </div>
+                )}
               </section>
 
-              <section className="glass-card overflow-hidden border border-white/5">
-                <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
-                  <h3 className="font-bold text-white text-sm">Biblioteca de Expedientes</h3>
-                  <Search size={16} className="text-slate-500" />
-                </div>
-                <div className="divide-y divide-white/5 font-medium">
-                  {tramites.map(tramite => (
-                    <div key={tramite.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <FileIcon type={tramite.tipo} />
-                        <div>
-                          <p className="text-sm text-white">{tramite.tipo}</p>
-                          <p className="text-[10px] text-slate-500 uppercase">Resguardo Digital • 1.2 MB</p>
+              {/* Reportes aplicables */}
+              <div className="glass-card" style={{ padding: 20 }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 14px' }}>
+                  Reportes Aplicables (auto-resueltos)
+                </h3>
+                {reportes.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {reportes.map(r => {
+                      const col = COLORES_REPORTE[r];
+                      const p = { MISSE_FormatoA: 'SENER', Informe_Preventivo: 'ASEA', MIA_Particular: 'ASEA', RGRP: 'SEMARNAT / ASEA' }[r];
+                      return (
+                        <div key={r} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 8, background: col.bg, border: `1px solid ${col.border}` }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: col.text }}>{etiquetaReporte(r)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{p}</span>
                         </div>
-                      </div>
-                      <ChevronRight size={16} className="text-slate-700" />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Completa tipo de proyecto y capacidad para ver los reportes aplicables.
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </div>
 
-        {/* Info Sidebar */}
-        <div className="space-y-6">
-          <div className="glass-card p-6 border border-white/5">
-            <h4 className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-4">Información del Sitio</h4>
-            <div className="space-y-4">
-              <InfoItem label="RFC" value={gasolinera.rfc} />
-              <InfoItem label="NRA" value={gasolinera.nra || '-'} />
-              <InfoItem label="Permiso CRE" value={gasolinera.permiso_cre || '-'} />
-              <InfoItem label="Ubicación" value={`${gasolinera.lat.toFixed(4)}, ${gasolinera.lng.toFixed(4)}`} />
+        {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Info del sitio */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <h4 style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 14px' }}>
+              Información del Sitio
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <InfoRow label="RFC" value={gas.rfc} mono />
+              <InfoRow label="NRA" value={gas.nra || '—'} mono />
+              <InfoRow label="Permiso CRE" value={gas.permiso_cre || '—'} mono />
+              {gas.tipo_proyecto && <InfoRow label="Tipo" value={TIPOS_PROYECTO.find(t => t.value === gas.tipo_proyecto)?.label ?? gas.tipo_proyecto} />}
+              {gas.capacidad_almacenamiento_litros && <InfoRow label="Capacidad" value={`${gas.capacidad_almacenamiento_litros.toLocaleString()} L`} mono />}
+              {gas.cp && <InfoRow label="CP" value={gas.cp} mono />}
             </div>
           </div>
 
-          <div className="glass-card p-6 border border-white/5">
-            <h4 className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-4">Responsable Técnico</h4>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-cyan-400">
-                <ShieldCheck size={24} />
+          {/* Responsable técnico */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <h4 style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 14px' }}>
+              Responsable Técnico
+            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <ShieldCheck size={20} color="var(--primary)" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">{gasolinera.responsable_tecnico || 'No asignado'}</p>
-                <p className="text-xs text-slate-500">Ingeniero Certificado</p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px' }}>
+                  {gas.responsable_tecnico || 'No asignado'}
+                </p>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>Consultor Ambiental</p>
               </div>
             </div>
           </div>
 
-          <div className="glass-card p-6 bg-red-500/5 border border-red-500/20">
-            <div className="flex items-center gap-3 mb-3">
-              <AlertTriangle className="text-red-500" size={18} />
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Alertas de Sitio</h4>
+          {/* Alertas reales */}
+          {alertas.length > 0 && (
+            <div className="glass-card" style={{ padding: 20, background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <AlertTriangle size={16} color="var(--danger)" />
+                <h4 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+                  Pendientes ({alertas.length})
+                </h4>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {alertas.map((a, i) => (
+                  <li key={i} style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 500 }}>{a}</li>
+                ))}
+              </ul>
             </div>
-            <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
-              <li className="text-red-400 font-medium">Dictamen SRV vencido</li>
-              <li>Actualización de bitácora mensual pendiente</li>
-              <li>Revisión de válvulas check requerida</li>
-            </ul>
-          </div>
+          )}
+
+          {alertas.length === 0 && (
+            <div className="glass-card" style={{ padding: 20, background: 'var(--success-dim)', border: '1px solid rgba(34,197,94,0.25)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={16} color="var(--success)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)' }}>Datos completos</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function TabButton({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+// ── Componentes auxiliares ──────────────────────────────────────────────────
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <button 
+    <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px', paddingTop: 8, borderTop: '1px solid var(--border-glass)' }}>
+      {children}
+    </p>
+  );
+}
+
+function TabBtn({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
       onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-medium text-sm border-2 border-transparent",
-        active ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/20 shadow-lg" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-      )}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+        borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 600 : 500,
+        background: active ? 'rgba(26,109,255,0.15)' : 'transparent',
+        color: active ? 'var(--primary)' : 'var(--text-muted)',
+        transition: 'all 0.18s ease',
+      }}
     >
-      {icon}
-      <span>{label}</span>
-      {active && (
-        <motion.div layoutId="tabIndicator" className="w-1 h-1 bg-cyan-400 rounded-full" />
-      )}
+      {icon}{label}
     </button>
   );
 }
 
-function InfoItem({ label, value }: { label: string, value: string }) {
+function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between items-end border-b border-white/5 pb-2">
-      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{label}</span>
-      <span className="text-sm font-mono text-slate-300">{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 8, borderBottom: '1px solid var(--border-glass)' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+      <span className={mono ? 'font-mono-kenzly' : ''} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{value}</span>
     </div>
   );
 }
 
-function StatusCard({ label, status, date, color }: { label: string, status: string, date: string, color: string }) {
-  const colors: Record<string, string> = {
-    green: "text-green-500 bg-green-500/10 border-green-500/20",
-    blue: "text-blue-500 bg-blue-500/10 border-blue-500/20",
-    cyan: "text-cyan-500 bg-cyan-500/10 border-cyan-500/20",
-    red: "text-red-500 bg-red-500/10 border-red-500/20",
-    amber: "text-amber-500 bg-amber-500/10 border-amber-500/20",
-  };
-
+function KPISmall({ label, value }: { label: string; value: string }) {
   return (
-    <div className="glass-card p-4 border border-white/5">
-      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-3">{label}</p>
-      <div className="flex items-center justify-between">
-        <span className={cn("text-xs font-black uppercase tracking-tighter px-2 py-0.5 rounded border", colors[color])}>
-          {status}
-        </span>
-        <span className="text-[10px] text-slate-600 font-medium">{date}</span>
-      </div>
+    <div>
+      <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 4px' }}>{label}</p>
+      <p className="font-mono-kenzly" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{value}</p>
     </div>
   );
 }
 
-function FileIcon({ type }: { type: string }) {
+function FlagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-slate-500">
-      <FileText size={20} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: active ? 'var(--danger)' : 'var(--text-muted)', fontWeight: active ? 700 : 500 }}>
+      <div style={{ width: 8, height: 8, borderRadius: '50%', background: active ? 'var(--danger)' : 'var(--border-glass)', position: 'relative' }} className={active ? 'status-pulse' : ''} />
+      {label}
     </div>
   );
 }
 
-function MapPinIcon({ size = 16 }) {
-  return <MapPin size={size} />;
-}
-
-function Modal({ title, children, onClose }: { title: string, children: React.ReactNode, onClose: () => void }) {
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-      />
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative z-10 glass-card p-8 w-full max-w-lg border border-white/20 shadow-2xl overflow-hidden"
-      >
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
-            <Plus size={24} className="rotate-45" />
-          </button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }} />
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="glass-card" style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: 480, padding: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
         </div>
         {children}
       </motion.div>
@@ -590,33 +607,31 @@ function Modal({ title, children, onClose }: { title: string, children: React.Re
   );
 }
 
-function FormField({ label, value, onChange, type = "text" }: { label: string, value: string, onChange: (v: string) => void, type?: string }) {
+function FormField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
-    <div className="space-y-2">
-      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>
-      <input 
-        type={type} 
-        className="glass-input w-full"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-      />
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>{label}</label>
+      <input type={type} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} value={value} onChange={e => onChange(e.target.value)} />
     </div>
   );
 }
 
-function SelectField({ label, value, options, onChange }: { label: string, value?: string, options: string[], onChange: (v: string) => void }) {
+function SelectField({ label, value, options, onChange }: { label: string; value?: string; options: string[]; onChange: (v: string) => void }) {
   return (
-    <div className="space-y-2">
-      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>
-      <select 
-        className="glass-input w-full appearance-none capitalize"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-      >
-        {options.map(opt => (
-          <option key={opt} value={opt} className="bg-[#0a0f18]">{opt.replace(/_/g, ' ')}</option>
-        ))}
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>{label}</label>
+      <select className="glass-input" style={{ width: '100%', color: 'var(--text-primary)', appearance: 'none', background: 'var(--bg-surface)' }} value={value} onChange={e => onChange(e.target.value)}>
+        {options.map(o => <option key={o} value={o} style={{ background: '#060912' }}>{o.replace(/_/g, ' ')}</option>)}
       </select>
     </div>
+  );
+}
+
+function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ width: 14, height: 14, accentColor: 'var(--primary)' }} />
+      {label}
+    </label>
   );
 }

@@ -1,22 +1,22 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  FileText, 
-  CheckCircle2, 
-  AlertCircle, 
-  Download, 
-  Loader2, 
-  ChevronRight, 
+import {
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Download,
+  Loader2,
+  ChevronRight,
   ChevronLeft,
   X,
-  Plus,
   Archive,
   RefreshCcw,
-  Zap
+  Zap,
 } from 'lucide-react';
-import { Gasolinera, Plantilla, RequerimientoDato } from '../../types';
-import { PLANTILLAS_ESTANDAR } from '../../constants/plantillas';
-import { generateDocumentContent } from '../../services/geminiService';
+import { Gasolinera, Plantilla, RequerimientoDato, TipoReporte } from '../../types';
+import { PLANTILLAS_ESTANDAR, COLORES_REPORTE, ETIQUETAS_REPORTE } from '../../constants/plantillas';
+import { generateReporteAmbiental } from '../../services/geminiService';
+import { resolverReportesAplicables } from '../../services/reportResolver';
 import { cn } from '../../lib/utils';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -32,6 +32,8 @@ interface ValidationResult {
   isValid: boolean;
 }
 
+const STEP_LABELS = ['Plantilla', 'Validación', 'Generación', 'Descarga'];
+
 export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProps) {
   const [step, setStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<Plantilla | null>(null);
@@ -39,11 +41,12 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedDocs, setGeneratedDocs] = useState<{name: string, content: string}[]>([]);
+  const [generatedDocs, setGeneratedDocs] = useState<{ name: string; content: string }[]>([]);
   const [showMissingForm, setShowMissingForm] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
 
   const handleToggleGas = (id: string) => {
-    setSelectedGasIds(prev => 
+    setSelectedGasIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -51,9 +54,7 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
   const validateSelection = async () => {
     if (!selectedTemplate) return;
     setIsValidating(true);
-    
-    // Simulate some logic delay for UX
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 600));
 
     const results = selectedGasIds.map(id => {
       const gas = gasolineras.find(g => g.id === id);
@@ -62,63 +63,43 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
         const val = gas[req.field as keyof Gasolinera];
         return val === undefined || val === null || val === '';
       });
-      return {
-        gasolineraId: id,
-        missingFields: missing,
-        isValid: missing.length === 0
-      };
+      return { gasolineraId: id, missingFields: missing, isValid: missing.length === 0 };
     });
 
     setValidationResults(results);
     setIsValidating(false);
-    
-    const allValid = results.every(r => r.isValid);
-    if (allValid) {
-      setStep(3);
-    } else {
-      // Stay on step 2 to fix missing data
-    }
+    if (results.every(r => r.isValid)) setStep(3);
   };
 
   const generateDocuments = async () => {
     if (!selectedTemplate) return;
     setIsGenerating(true);
-    const docs: {name: string, content: string}[] = [];
+    setGenerationProgress(0);
+    const docs: { name: string; content: string }[] = [];
 
     try {
-      for (const id of selectedGasIds) {
-        const gas = gasolineras.find(g => g.id === id);
+      for (let i = 0; i < selectedGasIds.length; i++) {
+        const gas = gasolineras.find(g => g.id === selectedGasIds[i]);
         if (!gas) continue;
-        
-        const content = await generateDocumentContent(selectedTemplate.nombre, gas, {});
+
+        const content = await generateReporteAmbiental(selectedTemplate.id as TipoReporte, gas);
         docs.push({
-          name: `${selectedTemplate.nombre}_${gas.razon_social.replace(/\s+/g, '_')}.docx`,
-          content
+          name: `${ETIQUETAS_REPORTE[selectedTemplate.id] ?? selectedTemplate.nombre}_${gas.razon_social.replace(/\s+/g, '_')}.docx`,
+          content,
         });
+        setGenerationProgress(Math.round(((i + 1) / selectedGasIds.length) * 100));
       }
       setGeneratedDocs(docs);
       setStep(4);
     } catch (error) {
-      console.error("Generation error:", error);
+      console.error('Error al generar reporte:', error);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const downloadAllAsZip = async () => {
-    const zip = new JSZip();
-    
-    for (const doc of generatedDocs) {
-      const docBlob = await createDocxBlob(doc.content, doc.name.split('.')[0]);
-      zip.file(doc.name, docBlob);
-    }
-    
-    const content = await zip.generateAsync({ type: 'blob' });
-    saveAs(content, `Documentos_${selectedTemplate?.nombre.replace(/\s+/g, '_')}.zip`);
-  };
-
   const createDocxBlob = async (text: string, title: string) => {
-    const sections = text.split('\n\n');
+    const sections = text.split('\n\n').filter(Boolean);
     const doc = new Document({
       sections: [{
         properties: {},
@@ -127,122 +108,199 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
             text: title,
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
-            spacing: { after: 400 }
+            spacing: { after: 400 },
           }),
           ...sections.map(s => new Paragraph({
             children: [new TextRun(s)],
-            spacing: { after: 200 }
-          }))
-        ]
-      }]
+            spacing: { after: 200 },
+          })),
+        ],
+      }],
     });
-
     return await Packer.toBlob(doc);
   };
 
-  const downloadSingleDoc = async (doc: {name: string, content: string}) => {
-    const blob = await createDocxBlob(doc.content, doc.name.split('.')[0]);
+  const downloadAllAsZip = async () => {
+    const zip = new JSZip();
+    for (const doc of generatedDocs) {
+      const blob = await createDocxBlob(doc.content, doc.name.replace('.docx', ''));
+      zip.file(doc.name, blob);
+    }
+    const content = await zip.generateAsync({ type: 'blob' });
+    saveAs(content, `Reportes_${selectedTemplate?.nombre_corto ?? 'Kenzly'}.zip`);
+  };
+
+  const downloadSingleDoc = async (doc: { name: string; content: string }) => {
+    const blob = await createDocxBlob(doc.content, doc.name.replace('.docx', ''));
     saveAs(blob, doc.name);
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-20">
+    <div style={{ maxWidth: 900, margin: '0 auto', paddingBottom: 80 }} className="space-y-8">
       {/* Header */}
-      <div className="space-y-2">
-        <h2 className="text-4xl font-bold text-white tracking-tight flex items-center gap-3">
-          <FileText className="text-cyan-500" size={32} />
-          Generador de Machotes
+      <div>
+        <h2 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <FileText size={28} color="var(--primary)" />
+          Generador de Reportes
         </h2>
-        <p className="text-slate-400">Genera documentación técnica masiva validada por IA.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+          Genera reportes ambientales oficiales (MISSE, IP, MIA-P, RGRP) con contenido redactado por IA.
+        </p>
       </div>
 
       {/* Stepper */}
-      <div className="flex items-center justify-between glass-card p-4">
-        {[1, 2, 3, 4].map(num => (
-          <div key={num} className="flex items-center gap-3">
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center font-bold transition-all",
-              step === num ? "bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]" : 
-              step > num ? "bg-emerald-500 text-white" : "bg-white/5 text-slate-500"
-            )}>
-              {step > num ? <CheckCircle2 size={16} /> : num}
+      <div className="glass-card" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {STEP_LABELS.map((label, i) => {
+          const num = i + 1;
+          const isActive = step === num;
+          const isDone = step > num;
+          return (
+            <div key={num} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 13, transition: 'all 0.2s',
+                background: isActive ? 'var(--primary)' : isDone ? 'var(--success)' : 'rgba(255,255,255,0.06)',
+                color: isActive || isDone ? '#fff' : 'var(--text-muted)',
+                boxShadow: isActive ? '0 0 18px rgba(26,109,255,0.5)' : 'none',
+              }}>
+                {isDone ? <CheckCircle2 size={16} /> : num}
+              </div>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+                color: isActive ? 'var(--primary)' : isDone ? 'var(--success)' : 'var(--text-muted)',
+                display: 'none',
+              }} className="hidden md:block">
+                {label}
+              </span>
+              {num < 4 && <div style={{ height: 1, width: 40, background: 'var(--border-glass)' }} className="hidden md:block" />}
             </div>
-            <span className={cn(
-              "text-xs font-bold uppercase tracking-widest hidden md:block",
-              step === num ? "text-cyan-400" : step > num ? "text-emerald-400" : "text-slate-600"
-            )}>
-              {num === 1 ? 'Plantilla' : num === 2 ? 'Validación' : num === 3 ? 'Generación' : 'Descarga'}
-            </span>
-            {num < 4 && <div className="h-px w-8 md:w-20 bg-white/5" />}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <AnimatePresence mode="wait">
+        {/* Step 1: Template + Stations */}
         {step === 1 && (
-          <motion.div 
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
-          >
+          <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest px-4">1. Selecciona Plantilla</h3>
+              {/* Template selector */}
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 12 }}>
+                  1. Tipo de reporte
+                </p>
                 <div className="space-y-3">
-                  {PLANTILLAS_ESTANDAR.map(plantilla => (
-                    <button
-                      key={plantilla.id}
-                      onClick={() => setSelectedTemplate(plantilla)}
-                      className={cn(
-                        "w-full glass-card p-5 text-left border transition-all hover:scale-[1.02]",
-                        selectedTemplate?.id === plantilla.id ? "border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/20" : "border-white/5 hover:border-white/10"
-                      )}
-                    >
-                      <div className="font-bold text-white mb-1 flex items-center justify-between">
-                        {plantilla.nombre}
-                        {selectedTemplate?.id === plantilla.id && <CheckCircle2 className="text-cyan-500" size={18} />}
-                      </div>
-                      <p className="text-xs text-slate-400 line-clamp-2">{plantilla.descripcion}</p>
-                    </button>
-                  ))}
+                  {PLANTILLAS_ESTANDAR.map(plantilla => {
+                    const colors = COLORES_REPORTE[plantilla.id];
+                    const isSelected = selectedTemplate?.id === plantilla.id;
+                    return (
+                      <button
+                        key={plantilla.id}
+                        onClick={() => setSelectedTemplate(plantilla)}
+                        className="glass-card"
+                        style={{
+                          width: '100%', padding: '16px 20px', textAlign: 'left',
+                          border: isSelected ? `1px solid ${colors.border}` : '1px solid var(--border-glass)',
+                          background: isSelected ? colors.bg : undefined,
+                          cursor: 'pointer', transition: 'all 0.18s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <span style={{ fontWeight: 700, color: isSelected ? colors.text : 'var(--text-primary)', fontSize: 14 }}>
+                            {plantilla.nombre_corto}
+                          </span>
+                          {isSelected && <CheckCircle2 size={16} color={colors.text} />}
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                          {plantilla.autoridad}
+                        </p>
+                        <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '6px 0 0', fontWeight: 600 }}>
+                          {plantilla.tiempo_resolucion}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest px-4">2. Selecciona Estaciones ({selectedGasIds.length})</h3>
-                <div className="glass-card max-h-[400px] overflow-y-auto p-2 scrollbar-hide">
-                  {gasolineras.map(gas => (
-                    <button
-                      key={gas.id}
-                      onClick={() => handleToggleGas(gas.id)}
-                      className={cn(
-                        "w-full flex items-center gap-4 p-4 rounded-xl transition-all hover:bg-white/5 mb-1",
-                        selectedGasIds.includes(gas.id) ? "bg-white/10" : ""
-                      )}
-                    >
-                      <div className={cn(
-                        "w-5 h-5 rounded border flex items-center justify-center transition-all",
-                        selectedGasIds.includes(gas.id) ? "bg-cyan-500 border-cyan-500" : "border-white/20"
-                      )}>
-                        {selectedGasIds.includes(gas.id) && <CheckCircle2 size={12} className="text-white" />}
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-bold text-white">{gas.razon_social}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{gas.rfc}</div>
-                      </div>
-                    </button>
-                  ))}
+              {/* Station selector */}
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 12 }}>
+                  2. Estaciones ({selectedGasIds.length} seleccionadas)
+                </p>
+                <div className="glass-card" style={{ maxHeight: 420, overflowY: 'auto', padding: 8 }}>
+                  {gasolineras.length === 0 && (
+                    <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                      Sin estaciones registradas
+                    </div>
+                  )}
+                  {gasolineras.map(gas => {
+                    const aplicables = resolverReportesAplicables(gas);
+                    const isCompatible = !selectedTemplate || aplicables.includes(selectedTemplate.id as TipoReporte);
+                    const isSelected = selectedGasIds.includes(gas.id);
+                    return (
+                      <button
+                        key={gas.id}
+                        onClick={() => handleToggleGas(gas.id)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px',
+                          borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s',
+                          background: isSelected ? 'var(--primary-dim)' : undefined,
+                          marginBottom: 4, textAlign: 'left',
+                          border: isSelected ? '1px solid var(--primary-glow)' : '1px solid transparent',
+                          opacity: selectedTemplate && !isCompatible ? 0.45 : 1,
+                        }}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 2,
+                          background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+                          border: `1px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.15)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {isSelected && <CheckCircle2 size={11} color="#fff" />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {gas.razon_social}
+                          </p>
+                          <p className="font-mono-kenzly" style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 6px' }}>{gas.rfc}</p>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {aplicables.map(tipo => {
+                              const c = COLORES_REPORTE[tipo];
+                              return (
+                                <span key={tipo} style={{
+                                  fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4,
+                                  background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+                                  letterSpacing: '0.4px', textTransform: 'uppercase',
+                                }}>
+                                  {ETIQUETAS_REPORTE[tipo]}
+                                </span>
+                              );
+                            })}
+                            {aplicables.length === 0 && (
+                              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin tipo de proyecto</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-4">
-              <button 
+            {selectedTemplate && (
+              <div style={{ padding: '12px 18px', background: 'var(--primary-dim)', borderRadius: 10, border: '1px solid var(--primary-glow)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--primary)' }}>{selectedTemplate.nombre}</strong>
+                {' — '}{selectedTemplate.fundamento_legal}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
                 onClick={() => setStep(2)}
                 disabled={!selectedTemplate || selectedGasIds.length === 0}
-                className="btn-primary flex items-center gap-2"
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: (!selectedTemplate || selectedGasIds.length === 0) ? 0.4 : 1 }}
               >
                 Continuar a Validación <ChevronRight size={18} />
               </button>
@@ -250,64 +308,71 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
           </motion.div>
         )}
 
+        {/* Step 2: Validation */}
         {step === 2 && (
-          <motion.div 
-            key="step2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="flex items-center justify-between">
+          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
-                <h3 className="text-xl font-bold text-white">Validación de Datos</h3>
-                <p className="text-sm text-slate-400">Verificando que las estaciones cuenten con los requerimientos para: {selectedTemplate?.nombre}</p>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Validación de Datos</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                  Verificando campos requeridos para: <strong style={{ color: 'var(--text-secondary)' }}>{selectedTemplate?.nombre}</strong>
+                </p>
               </div>
-              <button 
+              <button
                 onClick={validateSelection}
                 disabled={isValidating}
-                className="btn-secondary flex items-center gap-2"
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
               >
-                {isValidating ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
+                {isValidating ? <Loader2 className="animate-spin" size={16} /> : <RefreshCcw size={16} />}
                 {validationResults.length === 0 ? 'Iniciar Validación' : 'Re-validar'}
               </button>
             </div>
 
             {validationResults.length > 0 && (
-              <div className="grid grid-cols-1 gap-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {validationResults.map(res => {
                   const gas = gasolineras.find(g => g.id === res.gasolineraId)!;
                   return (
-                    <div key={res.gasolineraId} className="glass-card p-5 flex items-center justify-between border border-white/5">
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center",
-                          res.isValid ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                        )}>
-                          {res.isValid ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+                    <div key={res.gasolineraId} className="glass-card" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: res.isValid ? 'var(--success-dim)' : 'var(--warning-dim)',
+                        }}>
+                          {res.isValid
+                            ? <CheckCircle2 size={22} color="var(--success)" />
+                            : <AlertCircle size={22} color="var(--warning)" />}
                         </div>
                         <div>
-                          <div className="font-bold text-white">{gas.razon_social}</div>
-                          <div className="text-xs text-slate-500">
-                            {res.isValid ? 'Todos los datos completos' : `${res.missingFields.length} campos faltantes`}
-                          </div>
+                          <p style={{ fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 3px', fontSize: 14 }}>{gas.razon_social}</p>
+                          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                            {res.isValid ? 'Todos los campos completos' : `${res.missingFields.length} campo${res.missingFields.length > 1 ? 's' : ''} faltante${res.missingFields.length > 1 ? 's' : ''}`}
+                          </p>
                         </div>
                       </div>
 
                       {!res.isValid && (
-                        <div className="flex items-center gap-4">
-                          <div className="flex -space-x-2">
-                            {res.missingFields.slice(0, 3).map(f => (
-                              <div key={f.id} title={f.label} className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] text-slate-500">
-                                {f.id.slice(0, 2).toUpperCase()}
-                              </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 200 }}>
+                            {res.missingFields.slice(0, 4).map(f => (
+                              <span key={f.id} title={f.label} style={{
+                                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                                background: 'var(--warning-dim)', color: 'var(--warning)',
+                                textTransform: 'uppercase', letterSpacing: '0.4px',
+                              }}>
+                                {f.id.slice(0, 3).toUpperCase()}
+                              </span>
                             ))}
+                            {res.missingFields.length > 4 && (
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{res.missingFields.length - 4}</span>
+                            )}
                           </div>
-                          <button 
+                          <button
                             onClick={() => setShowMissingForm(res.gasolineraId)}
-                            className="text-xs font-bold text-cyan-500 hover:underline"
+                            style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}
                           >
-                            Rellenar ahora
+                            Rellenar
                           </button>
                         </div>
                       )}
@@ -317,52 +382,58 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
               </div>
             )}
 
-            <div className="flex justify-between pt-8 border-t border-white/5">
-              <button onClick={() => setStep(1)} className="btn-secondary flex items-center gap-2">
-                <ChevronLeft size={18} /> Anterior
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 24, borderTop: '1px solid var(--border-glass)' }}>
+              <button onClick={() => setStep(1)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <ChevronLeft size={16} /> Anterior
               </button>
-              <button 
+              <button
                 onClick={() => setStep(3)}
                 disabled={validationResults.length === 0 || !validationResults.every(r => r.isValid)}
-                className="btn-primary flex items-center gap-2"
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: (validationResults.length === 0 || !validationResults.every(r => r.isValid)) ? 0.4 : 1 }}
               >
-                Generar Documentos <ChevronRight size={18} />
+                Generar Reportes <ChevronRight size={16} />
               </button>
             </div>
           </motion.div>
         )}
 
+        {/* Step 3: Generate */}
         {step === 3 && (
-          <motion.div 
+          <motion.div
             key="step3"
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
-            className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/5"
+            className="glass-card"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 40px', minHeight: 300 }}
           >
             {isGenerating ? (
-              <div className="text-center space-y-6">
-                <div className="relative">
-                  <Loader2 className="animate-spin text-cyan-500" size={64} />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Zap className="text-cyan-400 fill-cyan-400" size={24} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ position: 'relative', display: 'inline-block', marginBottom: 24 }}>
+                  <Loader2 className="animate-spin" size={64} color="var(--primary)" />
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Zap size={24} color="var(--primary)" fill="var(--primary)" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-white tracking-tight">AI en Acción</h3>
-                  <p className="text-slate-400 text-sm">Redactando {selectedGasIds.length} documentos técnicos personalizados...</p>
+                <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>IA redactando…</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>
+                  Generando {selectedGasIds.length} reporte{selectedGasIds.length > 1 ? 's' : ''} — {generationProgress}% completado
+                </p>
+                <div style={{ width: 240, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', margin: '0 auto' }}>
+                  <div style={{ height: '100%', background: 'var(--primary)', borderRadius: 4, width: `${generationProgress}%`, transition: 'width 0.4s ease' }} />
                 </div>
               </div>
             ) : (
-              <div className="text-center space-y-8">
-                <div className="w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center mx-auto">
-                  <FileText className="text-cyan-500" size={40} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <FileText size={32} color="var(--primary)" />
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-white tracking-tight">Listos para procesar</h3>
-                  <p className="text-slate-400 text-sm">Los datos han sido validados. Se generarán {selectedGasIds.length} machotes únicos.</p>
-                </div>
-                <button onClick={generateDocuments} className="btn-primary px-12 py-4 text-lg">
+                <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Listos para procesar</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 32px' }}>
+                  Se generarán <strong style={{ color: 'var(--text-secondary)' }}>{selectedGasIds.length}</strong> reporte{selectedGasIds.length > 1 ? 's' : ''} de tipo <strong style={{ color: 'var(--primary)' }}>{selectedTemplate?.nombre_corto}</strong>.
+                </p>
+                <button onClick={generateDocuments} className="btn-primary" style={{ padding: '14px 48px', fontSize: 15 }}>
                   Lanzar Generación Masiva
                 </button>
               </div>
@@ -370,104 +441,106 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
           </motion.div>
         )}
 
+        {/* Step 4: Download */}
         {step === 4 && (
-          <motion.div 
-            key="step4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <div className="flex items-center justify-between">
+          <motion.div key="step4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
-                <h3 className="text-2xl font-bold text-white">Documentos Listos</h3>
-                <p className="text-sm text-slate-400">Se han generado {generatedDocs.length} documentos satisfactoriamente.</p>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Reportes Listos</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                  {generatedDocs.length} documento{generatedDocs.length > 1 ? 's' : ''} generado{generatedDocs.length > 1 ? 's' : ''} satisfactoriamente.
+                </p>
               </div>
-              <button onClick={downloadAllAsZip} className="btn-primary flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 border-none">
-                <Archive size={18} /> Descargar todo (.ZIP)
+              <button onClick={downloadAllAsZip} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <Archive size={16} /> Descargar ZIP
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {generatedDocs.map((doc, idx) => (
-                <div key={idx} className="glass-card p-5 border border-white/5 flex items-center justify-between group hover:border-cyan-500/30 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white/5 rounded-xl text-blue-400">
-                      <FileText size={24} />
+                <div
+                  key={idx}
+                  className="glass-card"
+                  style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, transition: 'border 0.2s' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ padding: 12, background: 'var(--primary-dim)', borderRadius: 10, border: '1px solid var(--primary-glow)' }}>
+                      <FileText size={22} color="var(--primary)" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-white truncate max-w-[200px]">{doc.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">Word Document | {Math.round(doc.content.length / 1024)} KB</div>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 3px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {doc.name}
+                      </p>
+                      <p className="font-mono-kenzly" style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>
+                        DOCX · ~{Math.max(1, Math.round(doc.content.length / 1024))} KB
+                      </p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => downloadSingleDoc(doc)}
-                    className="p-3 bg-white/5 rounded-full text-slate-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-cyan-500 hover:text-white"
+                    style={{ padding: 10, borderRadius: 8, background: 'var(--primary-dim)', border: '1px solid var(--primary-glow)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   >
-                    <Download size={20} />
+                    <Download size={16} color="var(--primary)" />
                   </button>
                 </div>
               ))}
             </div>
 
-            <div className="pt-8 flex justify-center">
-              <button 
-                onClick={() => {
-                  setStep(1);
-                  setGeneratedDocs([]);
-                  setSelectedGasIds([]);
-                }}
-                className="btn-secondary flex items-center gap-2"
+            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
+              <button
+                onClick={() => { setStep(1); setGeneratedDocs([]); setSelectedGasIds([]); setValidationResults([]); setGenerationProgress(0); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
               >
-                Nueva Generación Masiva
+                Nueva Generación
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Modal for missing data */}
+      {/* Modal: fill missing fields */}
       {showMissingForm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowMissingForm(null)} />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={() => setShowMissingForm(null)} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="relative z-10 glass-card p-8 w-full max-w-lg border border-white/10"
+            className="glass-card"
+            style={{ position: 'relative', zIndex: 10, padding: 32, width: '100%', maxWidth: 480 }}
           >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Completar Datos Requeridos</h3>
-              <button onClick={() => setShowMissingForm(null)} className="text-slate-500 hover:text-white">
-                <X size={24} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Completar Datos Requeridos</h3>
+              <button onClick={() => setShowMissingForm(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={22} />
               </button>
             </div>
 
-            <div className="space-y-4 mb-8">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 28 }}>
               {validationResults.find(r => r.gasolineraId === showMissingForm)?.missingFields.map(req => (
-                <div key={req.id} className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">{req.label}</label>
-                  <input 
-                    type="text" 
-                    className="glass-input w-full" 
-                    placeholder={`Ingresa ${req.label.toLowerCase()}`}
-                  />
+                <div key={req.id}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'block', marginBottom: 6 }}>
+                    {req.label}
+                  </label>
+                  <input type="text" className="glass-input" style={{ width: '100%' }} placeholder={`Ingresa ${req.label.toLowerCase()}`} />
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-4">
-              <button onClick={() => setShowMissingForm(null)} className="btn-secondary flex-1">Cerrar</button>
-              <button 
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setShowMissingForm(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                Cerrar
+              </button>
+              <button
                 onClick={() => {
-                  // In a real app we'd save this to Firebase
-                  // For now we'll just mock completion to proceed
-                  setValidationResults(prev => prev.map(r => 
+                  setValidationResults(prev => prev.map(r =>
                     r.gasolineraId === showMissingForm ? { ...r, isValid: true, missingFields: [] } : r
                   ));
                   setShowMissingForm(null);
                 }}
-                className="btn-primary flex-1"
+                className="btn-primary"
+                style={{ flex: 1 }}
               >
-                Guardar y Validar
+                Marcar Completo
               </button>
             </div>
           </motion.div>
