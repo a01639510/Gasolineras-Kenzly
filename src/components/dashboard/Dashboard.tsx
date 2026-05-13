@@ -84,7 +84,7 @@ export default function Dashboard({ gasolineras, onSelect }: DashboardProps) {
             </div>
           </div>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={256}>
               <BarChart data={chartData}>
                 <XAxis dataKey="name" hide />
                 <YAxis hide />
@@ -107,7 +107,7 @@ export default function Dashboard({ gasolineras, onSelect }: DashboardProps) {
           <h3 className="font-bold text-white mb-6">Estado COA por Zona</h3>
           <div className="flex-1 flex items-center justify-center">
             <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={192}>
                 <PieChart>
                   <Pie
                     data={chartData}
