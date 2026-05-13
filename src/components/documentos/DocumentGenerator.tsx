@@ -44,6 +44,7 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
   const [generatedDocs, setGeneratedDocs] = useState<{ name: string; content: string }[]>([]);
   const [showMissingForm, setShowMissingForm] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const handleToggleGas = (id: string) => {
     setSelectedGasIds(prev =>
@@ -71,16 +72,21 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
     if (results.every(r => r.isValid)) setStep(3);
   };
 
+  const INTER_REQUEST_DELAY_MS = 13000; // stay under 5 req/min free-tier limit
+
   const generateDocuments = async () => {
     if (!selectedTemplate) return;
     setIsGenerating(true);
     setGenerationProgress(0);
+    setGenerationError(null);
     const docs: { name: string; content: string }[] = [];
 
     try {
       for (let i = 0; i < selectedGasIds.length; i++) {
         const gas = gasolineras.find(g => g.id === selectedGasIds[i]);
         if (!gas) continue;
+
+        if (i > 0) await new Promise(r => setTimeout(r, INTER_REQUEST_DELAY_MS));
 
         const content = await generateReporteAmbiental(selectedTemplate.id as TipoReporte, gas);
         docs.push({
@@ -91,8 +97,26 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
       }
       setGeneratedDocs(docs);
       setStep(4);
-    } catch (error) {
-      console.error('Error al generar reporte:', error);
+    } catch (error: unknown) {
+      const msg = (error as any)?.message ?? String(error);
+      const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+      const retryMatch = msg.match(/"retryDelay":"(\d+)s"/);
+      const retrySecs = retryMatch ? retryMatch[1] : null;
+
+      if (is429) {
+        const quotaExhausted = msg.includes('limit: 0');
+        setGenerationError(
+          quotaExhausted
+            ? 'Cuota diaria de la API de Gemini agotada. Activa facturación en Google AI Studio o espera hasta mañana para que se restablezca.'
+            : `Límite de solicitudes por minuto alcanzado.${retrySecs ? ` Reintentando automáticamente en ${retrySecs}s…` : ' Intenta de nuevo en 1 minuto.'}`
+        );
+      } else {
+        setGenerationError('Error al conectar con la API de Gemini. Revisa tu clave API y conexión.');
+      }
+      if (docs.length > 0) {
+        setGeneratedDocs(docs);
+        setStep(4);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -408,6 +432,12 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
             className="glass-card"
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 40px', minHeight: 300 }}
           >
+            {generationError && (
+              <div style={{ width: '100%', maxWidth: 560, marginBottom: 32, padding: '16px 20px', borderRadius: 12, background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <AlertCircle size={18} color="var(--danger)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 13, color: 'var(--danger)', margin: 0, lineHeight: 1.5 }}>{generationError}</p>
+              </div>
+            )}
             {isGenerating ? (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ position: 'relative', display: 'inline-block', marginBottom: 24 }}>
@@ -417,8 +447,11 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
                   </div>
                 </div>
                 <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>IA redactando…</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>
-                  Generando {selectedGasIds.length} reporte{selectedGasIds.length > 1 ? 's' : ''} — {generationProgress}% completado
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 4px' }}>
+                  Reporte {Math.min(Math.ceil(generationProgress / (100 / selectedGasIds.length)), selectedGasIds.length)} de {selectedGasIds.length} — {generationProgress}% completado
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 20px', opacity: 0.7 }}>
+                  Pausando 13s entre solicitudes (límite API: 5/min)
                 </p>
                 <div style={{ width: 240, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', margin: '0 auto' }}>
                   <div style={{ height: '100%', background: 'var(--primary)', borderRadius: 4, width: `${generationProgress}%`, transition: 'width 0.4s ease' }} />
@@ -488,7 +521,7 @@ export default function DocumentGenerator({ gasolineras }: DocumentGeneratorProp
 
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
               <button
-                onClick={() => { setStep(1); setGeneratedDocs([]); setSelectedGasIds([]); setValidationResults([]); setGenerationProgress(0); }}
+                onClick={() => { setStep(1); setGeneratedDocs([]); setSelectedGasIds([]); setValidationResults([]); setGenerationProgress(0); setGenerationError(null); }}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
               >
                 Nueva Generación

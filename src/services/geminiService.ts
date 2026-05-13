@@ -5,6 +5,36 @@ import { interpolarPrompt, plantillaParaReporte } from "./reportResolver";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 const MODEL = "gemini-2.0-flash";
 
+function extractRetryDelayMs(error: unknown): number {
+  try {
+    const msg = (error as any)?.message ?? '';
+    const match = msg.match(/"retryDelay":"(\d+)s"/);
+    return match ? parseInt(match[1]) * 1000 : 35000;
+  } catch {
+    return 35000;
+  }
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = (err as any)?.message ?? '';
+      const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+      if (is429 && attempt < maxRetries) {
+        const delay = extractRetryDelayMs(err) * (attempt + 1);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 export async function extractGasolineraData(text: string) {
   const response = await ai.models.generateContent({
     model: MODEL,
@@ -119,10 +149,12 @@ REPORTE: ${plantilla.nombre}
 AUTORIDAD: ${plantilla.autoridad}
 FUNDAMENTO LEGAL: ${plantilla.fundamento_legal}`;
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: `${sistemaPrompt}\n\n${contextoProyecto}\n\n${promptBase}`,
-  });
+  const response = await withRetry(() =>
+    ai.models.generateContent({
+      model: MODEL,
+      contents: `${sistemaPrompt}\n\n${contextoProyecto}\n\n${promptBase}`,
+    })
+  );
 
   return response.text;
 }
