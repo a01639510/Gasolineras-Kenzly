@@ -9,7 +9,7 @@ Funciona con **doble clic** (un archivo HTML + JS), **sin instalación ni intern
 
 ## Cómo usar
 
-1. Abre `app/index.html` con doble clic (Chrome, Edge o Safari).
+1. Abre `index.html` con doble clic (Chrome, Edge o Safari) **o entra a la versión web** (ver abajo).
 2. Responde el cuestionario (mismos capítulos del IP: I → V). Cada campo está etiquetado:
    - 🔵 **Cerrada** — dato del proyecto (se teclea una vez y se propaga a todo el documento).
    - 🟢 **Redactada-cerrada** — boilerplate; sólo eliges/ajustas (p. ej. la disposición de cada estrategia POEGT).
@@ -24,13 +24,12 @@ Funciona con **doble clic** (un archivo HTML + JS), **sin instalación ni intern
 
 ```
 .
+├── index.html                       ← la app (ábrela con doble clic o en la web)
+├── data.js                          ← catálogos + boilerplate (estrategias POEGT, criterios UGA, instrumentos)
+├── documento.js                     ← machote completo del IP en bloques etiquetados
+├── app.js                           ← cuestionario, render de 2 vistas y exportación Word/PDF
 ├── README.md
 ├── LEEME.md                         ← guía detallada de uso
-├── app/                             ← la app local (cuestionario + motor)
-│   ├── index.html                      ← ábrela con doble clic
-│   ├── data.js                         ← catálogos + boilerplate (estrategias POEGT, criterios UGA, instrumentos)
-│   ├── documento.js                    ← machote completo del IP en bloques etiquetados
-│   └── app.js                          ← cuestionario, render de 2 vistas y exportación Word/PDF
 ├── docs/
 │   ├── 01_Flujo_de_Automatizacion.md   ← flujo de automatización
 │   └── 02_Mapeo_de_Proceso.md          ← mapeo de proceso (BPMN + KPIs)

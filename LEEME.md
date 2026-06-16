@@ -6,19 +6,19 @@ Automatiza **todas las respuestas cerradas** y las **redactadas pero cerradas (b
 
 ```
 Automatizacion_IP/
+├── index.html                       ← la app (ábrela con doble clic o en la web)
+├── data.js                          ← catálogos + boilerplate
+├── documento.js                     ← machote completo del IP en bloques
+├── app.js                           ← lógica + motor de ensamblado
 ├── LEEME.md                         ← este archivo
-├── docs/
-│   ├── 01_Flujo_de_Automatizacion.md   ← flujo de automatización extenso
-│   └── 02_Mapeo_de_Proceso.md          ← mapeo de proceso (BPMN + KPIs)
-└── app/                             ← APP LOCAL (el cuestionario)
-    ├── index.html                      ← ábrela con doble clic
-    ├── data.js                         ← catálogos + boilerplate
-    └── app.js                          ← lógica + motor de ensamblado
+└── docs/
+    ├── 01_Flujo_de_Automatizacion.md   ← flujo de automatización extenso
+    └── 02_Mapeo_de_Proceso.md          ← mapeo de proceso (BPMN + KPIs)
 ```
 
 ## Cómo usar la app
 
-1. **Abre** `app/index.html` con doble clic (Chrome, Edge o Safari). No necesita internet ni instalación.
+1. **Abre** `index.html` con doble clic (Chrome, Edge o Safari) o entra a la versión web. No necesita internet ni instalación.
 2. **Responde el cuestionario.** Está dividido en los mismos capítulos del IP (I → V). Cada campo tiene una etiqueta de color:
    - 🔵 **Cerrada** — dato del proyecto (se teclea una vez y se propaga a todo el documento).
    - 🟢 **Redactada-cerrada** — texto boilerplate; sólo eliges/ajustas (p. ej. la disposición de cada estrategia POEGT). Abre *"Ver texto que se generará"* para revisarlo.
@@ -47,4 +47,4 @@ Automatizacion_IP/
 | IV. Abandono · V. Conclusión | **80–100%** |
 | III.1.2–7, III.3, III.4 (mapas/biota), III.5 (Leopold), III.6 | guía ✎ (manual) |
 
-Personaliza los datos fijos de la consultora y el catálogo de estados/instrumentos editando `app/data.js`.
+Personaliza los datos fijos de la consultora y el catálogo de estados/instrumentos editando `data.js`.
