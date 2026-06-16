@@ -50,10 +50,10 @@
   }
   async function setImagen(id,file){
     if(!file || !file.type.startsWith("image/")){ toast("Selecciona un archivo de imagen"); return; }
-    try{ const url=await fileToDataURL(file); imgCache[id]=url; await idbPut(id,url); renderImagenes(); toast("Imagen cargada ✓"); }
+    try{ const url=await fileToDataURL(file); imgCache[id]=url; await idbPut(id,url); renderForm(); toast("Imagen cargada ✓"); }
     catch(e){ toast("No se pudo procesar la imagen"); }
   }
-  async function delImagen(id){ delete imgCache[id]; try{ await idbDel(id); }catch(e){} renderImagenes(); }
+  async function delImagen(id){ delete imgCache[id]; try{ await idbDel(id); }catch(e){} renderForm(); }
 
   // ---- Estado ----
   let state = load() || {
@@ -70,7 +70,8 @@
     if(!Array.isArray(state.instrumentos) || state.instrumentos.length!==D.INSTRUMENTOS.length)
       state.instrumentos=D.INSTRUMENTOS.map(i=>({sel:i.sel}));
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
-    if(!Array.isArray(state.extraFigs)) state.extraFigs=[];
+    if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
+    D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
   function g(id, def=""){ return state[id]!=null && state[id]!=="" ? state[id] : def; }
@@ -186,7 +187,9 @@
 
     { id:"V", grp:"V. Conclusión", titulo:"V. Conclusión", desc:"Texto fijo (no requiere modificación salvo indicación de ASEA).", fields:[
       {id:"incluirConclusion", l:"Incluir conclusión estándar", tipo:"check", b:"boiler", def:true}
-    ]}
+    ]},
+
+    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:"Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.", fields:[] }
   ];
 
   // Lista de campos cerrados/boiler que cuentan para el progreso
@@ -198,72 +201,92 @@
     const x=m[b]||m.cerrada; return `<span class="badge ${x[0]}">${x[1]}</span>`;
   }
 
+  // Numeración automática de figuras en orden de documento (respeta toggles)
+  function numerarFiguras(){
+    const figs=state.figuras||{}; const out={}; let n=0;
+    for(const a of D.AREAS){
+      const list=figs[a.id]||[];
+      const gatedOff = a.gatedBy && state[a.gatedBy]===false;
+      out[a.id]=list.map(f=>({ id:f.id, titulo:f.titulo,
+        num: (gatedOff || a.numbered===false) ? null : (++n) }));
+    }
+    return out;
+  }
+
   function renderForm(){
     const toc=$("#toc"); const form=$("#form");
-    let tocHtml="", lastGrp="";
-    let formHtml="";
+    let tocHtml="", lastGrp="", formHtml="";
+    const figMap = numerarFiguras();
+    const areasBySec = {};
+    D.AREAS.forEach(a=>{ (areasBySec[a.sec]=areasBySec[a.sec]||[]).push(a); });
     SECTIONS.forEach(sec=>{
       if(sec.grp!==lastGrp){ tocHtml+=`<div class="grp">${esc(sec.grp)}</div>`; lastGrp=sec.grp; }
       tocHtml+=`<a href="#sec-${sec.id}" data-sec="${sec.id}">${esc(sec.titulo)}</a>`;
       formHtml+=`<section class="card" id="sec-${sec.id}"><h2>${esc(sec.titulo)}</h2>`;
       if(sec.desc) formHtml+=`<div class="desc">${esc(sec.desc)}</div>`;
       sec.fields.forEach(f=>{ formHtml+=renderField(f); });
+      (areasBySec[sec.id]||[]).forEach(a=>{ formHtml+=renderFigArea(a, figMap[a.id]||[]); });
       formHtml+=`</section>`;
     });
-    // Sección de IMÁGENES (mapas y figuras)
-    tocHtml+=`<div class="grp">Imágenes</div><a href="#sec-imagenes" data-sec="imagenes">Imágenes (mapas y figuras)</a>`;
-    formHtml+=`<section class="card" id="sec-imagenes">
-      <h2>Imágenes (mapas y figuras)</h2>
-      <div class="desc">Sube aquí cada figura del documento. Se guardan en este dispositivo (bucket local) y aparecen con su pie <b>“Figura X. …”</b> tanto en la vista previa como en el Word. Puedes agregar imágenes/mapas adicionales al final.</div>
-      <div id="imgCards"></div>
-      <button class="btn imgadd" id="btnAddFig" type="button">➕ Agregar imagen / mapa adicional</button>
-    </section>`;
     toc.innerHTML=tocHtml; form.innerHTML=formHtml;
     bindInputs();
-    renderImagenes();
-    $("#btnAddFig").onclick=addExtraFig;
+    bindFiguras();
     setupScrollSpy();
     updateProgress();
   }
 
-  // Render del panel de imágenes (inputs por figura, con miniatura)
-  function renderImagenes(){
-    const cont=$("#imgCards"); if(!cont) return;
-    const figs=figList(); let html=""; let lastChap=null;
-    const extraIds = new Set((state.extraFigs||[]).map(f=>f.id));
-    figs.forEach(f=>{
-      if(f.chap!==lastChap){ html+=`<div class="imgchap">${esc(f.chap)}</div>`; lastChap=f.chap; }
-      const src=imgCache[f.id]; const isExtra=extraIds.has(f.id);
-      html+=`<div class="imgrow">
-        <div class="imgthumb ${src?'has':''}" data-pick="${esc(f.id)}">${ src?`<img src="${src}" alt="">`:`<span>🖼️</span>` }</div>
-        <div class="imgmeta">
-          <div class="imgcap">${esc(f.caption)}</div>
-          <div class="imgacts">
-            <label class="imglink">${src?'Reemplazar':'Subir imagen'}<input type="file" accept="image/*" data-fig="${esc(f.id)}" hidden></label>
+  // Render de un área de figuras (su lugar en la sección): + Agregar, título editable, miniatura
+  function renderFigArea(area, entries){
+    const gatedOff = area.gatedBy && state[area.gatedBy]===false;
+    const head = area.id==="anexo" ? "Anexo fotográfico (figuras adicionales)" : ("Figura: "+(area.defaults[0]||""));
+    let h=`<div class="figarea" data-area="${esc(area.id)}">
+      <div class="figarea-h"><span class="figarea-t">🖼️ ${esc(head)}</span>
+        <button type="button" class="figadd" data-figadd="${esc(area.id)}">+ Agregar imagen</button></div>`;
+    if(gatedOff) h+=`<div class="figarea-note">Esta subsección está desactivada; actívala para incluir sus figuras en el documento.</div>`;
+    if(!entries.length) h+=`<div class="figarea-empty">Sin imágenes. Usa “+ Agregar imagen”.</div>`;
+    entries.forEach(f=>{
+      const src=imgCache[f.id];
+      const numLbl = f.num!=null ? ("Figura "+f.num+".") : (area.numbered===false ? "Imagen" : "Figura —");
+      h+=`<div class="figrow">
+        <div class="figthumb ${src?'has':''}" data-pick="${esc(f.id)}">${ src?`<img src="${src}" alt="">`:`<span>🖼️</span>` }</div>
+        <div class="figmeta">
+          <div class="figtitle-row"><span class="fignum">${esc(numLbl)}</span>
+            <input class="figtitle" data-figtitle="${esc(f.id)}" data-area="${esc(area.id)}" value="${esc(f.titulo||'')}" placeholder="Título de la figura (editable)"></div>
+          <div class="figacts">
+            <label class="imglink">${src?'Reemplazar imagen':'Subir imagen'}<input type="file" accept="image/*" data-fig="${esc(f.id)}" hidden></label>
             ${ src?`<button type="button" class="imglink danger" data-figclear="${esc(f.id)}">Quitar imagen</button>`:'' }
-            ${ isExtra?`<button type="button" class="imglink danger" data-figremove="${esc(f.id)}">Eliminar figura</button>`:'' }
+            <button type="button" class="imglink danger" data-figdel="${esc(f.id)}" data-area="${esc(area.id)}">Eliminar figura</button>
           </div>
         </div>
       </div>`;
     });
-    cont.innerHTML=html;
-    cont.querySelectorAll("input[type=file][data-fig]").forEach(inp=>inp.onchange=e=>{ const file=e.target.files[0]; if(file) setImagen(inp.dataset.fig,file); });
-    cont.querySelectorAll(".imgthumb[data-pick]").forEach(t=>t.onclick=()=>{ const i=cont.querySelector(`input[data-fig="${t.dataset.pick}"]`); if(i) i.click(); });
-    cont.querySelectorAll("[data-figclear]").forEach(b=>b.onclick=()=>delImagen(b.dataset.figclear));
-    cont.querySelectorAll("[data-figremove]").forEach(b=>b.onclick=()=>removeExtraFig(b.dataset.figremove));
+    return h+`</div>`;
   }
 
-  function addExtraFig(){
-    const cap=prompt("Pie de la figura (p. ej. “Figura 32. Vista panorámica del predio”):","");
-    if(cap===null) return;
-    const id="x_"+Date.now().toString(36);
-    state.extraFigs.push({ id, caption: cap.trim() || ("Figura adicional ("+(state.extraFigs.length+1)+")") });
-    save(); renderImagenes();
-    toast("Figura agregada — ahora súbele una imagen");
+  function bindFiguras(){
+    const form=$("#form");
+    form.querySelectorAll("input[type=file][data-fig]").forEach(inp=>inp.onchange=e=>{ const file=e.target.files[0]; if(file) setImagen(inp.dataset.fig,file); });
+    form.querySelectorAll(".figthumb[data-pick]").forEach(t=>t.onclick=()=>{ const i=form.querySelector('input[data-fig="'+t.dataset.pick+'"]'); if(i) i.click(); });
+    form.querySelectorAll("[data-figclear]").forEach(b=>b.onclick=()=>delImagen(b.dataset.figclear));
+    form.querySelectorAll("[data-figdel]").forEach(b=>b.onclick=()=>removeFigura(b.dataset.area, b.dataset.figdel));
+    form.querySelectorAll("[data-figadd]").forEach(b=>b.onclick=()=>addFigura(b.dataset.figadd));
+    form.querySelectorAll("input.figtitle[data-figtitle]").forEach(inp=>inp.oninput=()=>editTitulo(inp.dataset.area, inp.dataset.figtitle, inp.value));
   }
-  function removeExtraFig(id){
-    state.extraFigs=(state.extraFigs||[]).filter(f=>f.id!==id);
-    save(); delImagen(id); // delImagen ya llama renderImagenes()
+
+  function addFigura(areaId){
+    state.figuras[areaId]=state.figuras[areaId]||[];
+    state.figuras[areaId].push({ id: areaId+"_"+Date.now().toString(36), titulo:"" });
+    save(); renderForm();
+    toast("Figura agregada — sube la imagen y edita su título");
+  }
+  function removeFigura(areaId, figId){
+    state.figuras[areaId]=(state.figuras[areaId]||[]).filter(f=>f.id!==figId);
+    delete imgCache[figId]; idbDel(figId).catch(()=>{});
+    save(); renderForm();
+  }
+  function editTitulo(areaId, figId, val){
+    const f=(state.figuras[areaId]||[]).find(x=>x.id===figId);
+    if(f){ f.titulo=val; save(); }
   }
 
   function renderField(f){
@@ -410,7 +433,7 @@
     };
   }
 
-  function makeCtx(){ return { g, v:vars(), interp, money:fmtMoney, state, D }; }
+  function makeCtx(){ return { g, v:vars(), interp, money:fmtMoney, state, D, figsByArea:numerarFiguras() }; }
   function buildBlocks(){ return window.IPDOC.build(makeCtx()); }
 
   // Cuenta áreas pendientes (instrucciones + tablas por llenar + figuras sin imagen)
@@ -604,7 +627,7 @@
     normalize();
     renderForm();
     // Carga el bucket de imágenes (async) y refresca cuando esté listo
-    idbAll().then(m=>{ imgCache=m; renderImagenes();
+    idbAll().then(m=>{ imgCache=m; renderForm();
       if($("#previewWrap") && $("#previewWrap").style.display==="block") mostrarVista();
       updateProgress();
     });

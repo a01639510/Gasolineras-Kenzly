@@ -21,7 +21,12 @@
     const I   = (x)    => B.push({ t:"p", k:"instr",  x, instr:true });
     const PEND= (x)    => B.push({ t:"p", k:"instr",  x, pend:true });
     const TBL = (o)    => B.push({ t:"table", k:o.k||"static", title:o.title, head:o.head, rows:o.rows });
-    const FIG = (id, cap) => B.push({ t:"fig", k:"instr", id, caption:cap });   // recuadro de imagen
+    // Emite todas las figuras registradas para un área, con su número auto ("Figura N.")
+    const FIGAREA = (areaId) => {
+      const arr = (ctx.figsByArea && ctx.figsByArea[areaId]) || [];
+      arr.forEach(f => B.push({ t:"fig", k:"instr", id:f.id, areaId,
+        caption: (f.num!=null ? ("Figura "+f.num+". ") : "") + (f.titulo||"") }));
+    };
     const SP  = ()     => B.push({ t:"sp" });
 
     const val = (id, ph) => { const x=g(id,""); return (x===""||x==null) ? ("["+(ph||"Especificar")+"]") : x; };
@@ -33,8 +38,8 @@
       proyecto: g("proyecto","[Nombre del proyecto]"),
       empresa:  g("empresa","[Nombre de empresa]"),
       fecha:    fechaLarga(g("fecha")) });
-    FIG("f01", "Logo de empresa");
-    FIG("f02", "Foto / diseño relacionado al proyecto (portada)");
+    FIGAREA("f01");
+    FIGAREA("f02");
 
     // ===================== ÍNDICE =====================
     H(2, "Contenido");
@@ -127,7 +132,7 @@
     H(3, "II.2 Planes de desarrollo urbano y de ordenamiento ecológico");
     H(4, "II.2.1 Programa de Ordenamiento Ecológico General del Territorio (POEGT)");
     P(interp(D.BOILER.poegt_intro, v));
-    FIG("f03", "Figura 1. Mapa de Unidad Ambiental Biofísica (UAB)");
+    FIGAREA("f03");
     TBL({ title:"Tabla II.2. Unidad Ambiental Biofísica (UAB) de interés por ubicación del proyecto",
           head:["Proyecto","UAB"], k: isAuto("uab")?"auto":"scaffold", rows:[[g("proyecto","[Proyecto]"), val("uab")]] });
     TBL({ title:"Tabla II.3. Políticas, usos y estrategias de regulación ecológica aplicables a la UAB",
@@ -145,7 +150,7 @@
     H(4, "II.2.3 Plan Estatal de Desarrollo");
     const blk = D.ESTADOS[g("estado")];
     if (blk) P(blk.planEstatal); else I("Selecciona el estado en I.1 para autocargar el bloque del Plan Estatal, o redáctalo. Estado actual: " + g("estado","[estado]") + ".");
-    FIG("f04", "Figura 2. Mapa de UGA del Ordenamiento Ecológico Territorial estatal (SIGEIA)");
+    FIGAREA("f04");
     TBL({ title:"Tabla II.5. Vinculación del proyecto con la UGA estatal",
           head:["Clave UGA","Política ambiental","Uso de suelo predominante","Criterios"],
           k: isAuto("ugaEstatal")?"auto":"scaffold",
@@ -166,7 +171,7 @@
                 ["Agua potable, alcantarillado y saneamiento","",""],["Calidad ambiental (aire, suelo, residuos)","",""],
                 ["Gestión de riesgos y resiliencia","",""]] });
     I("Vincular con el Programa de Ordenamiento Ecológico Local (POEL) del municipio: clave UGA, política ambiental, uso de suelo predominante, condicionado e incompatible.");
-    FIG("f05", "Figura 3. Mapa del Programa de Ordenamiento Ecológico Local (POEL) del municipio");
+    FIGAREA("f05");
     TBL({ title:"Tabla II.8. POEL — Unidad de Gestión Ambiental del municipio",
           head:["Clave UGA","Nombre UGA","Política territorial","Uso predominante","Uso condicionado","Uso incompatible"],
           k:"scaffold", rows:[["","","","","",""]] });
@@ -190,11 +195,11 @@
 
     H(4, "III.1.1 Localización del proyecto");
     I("Incluir cuadro de coordenadas geográficas y/o UTM (punto de latitud/longitud para predio; cuatro puntos extremos para zona; puntos de inflexión para proyectos lineales). Incluir mapas de localización a 4 niveles, a escala adecuada con simbología clara. Agregar colindancias directas e infraestructuras de mayor concurrencia con evidencia fotográfica.");
-    FIG("f06", "Figura 4. Mapa de macrolocalización (nivel nacional)");
-    FIG("f07", "Figura 5. Mapa de localización (nivel estatal)");
-    FIG("f08", "Figura 6. Mapa de localización (nivel municipal)");
-    FIG("f09", "Figura 7. Mapa de microlocalización (predio del proyecto)");
-    FIG("f10", "Figura 8. Evidencia fotográfica de colindancias");
+    FIGAREA("f06");
+    FIGAREA("f07");
+    FIGAREA("f08");
+    FIGAREA("f09");
+    FIGAREA("f10");
 
     H(4, "III.1.2 Actividades principales");
     I("Detallar principales actividades y acciones del giro (carga, almacenamiento, distribución), conforme al Art. 28 de la LGEEPA y 5 de su REIA.");
@@ -202,7 +207,7 @@
 
     H(4, "III.1.3 Dimensiones del proyecto");
     I("Para proyectos puntuales: área del predio (+ plano/croquis), mencionando superficies de afectación permanente y temporal. Describir instalaciones estructurales y civiles (urbanización, edificios/oficinas, techos, instalaciones hidráulicas y sanitarias, estación de vigilancia, zonas de protección, anuncio) e instalaciones industriales y mecánicas (tanques de almacenamiento, equipos clave, islotes de llenado/despachadores, tomas de recepción y suministro, sistema de aire comprimido).");
-    FIG("f11", "Figura 9. Plano arquitectónico / croquis del proyecto");
+    FIGAREA("f11");
 
     H(4, "III.1.4 Características del proyecto según su naturaleza");
     I("Mencionar los procesos que se emplearán, las sustancias y el tipo de almacenamiento, condiciones de operación, servicios requeridos (agua, energía, drenaje, residuos: especificar origen y sistemas) y obras provisionales/auxiliares al proyecto.");
@@ -227,7 +232,7 @@
           head:["No.","Ubicación","Tipo","Capacidad","Evidencia"], k:"scaffold", rows: empty(4,5) });
     TBL({ title:"Tabla III.6. Relación de distancias mínimas",
           head:["Elemento","Distancia requerida (m)","Distancia de proyecto (m)","Cumple"], k:"scaffold", rows: empty(4,4) });
-    FIG("f12", "Figura 10. Diagrama de flujo del proceso operativo");
+    FIGAREA("f12");
 
     H(3, "III.2 Identificación de sustancias o productos");
     I("Mencionar tipo, cantidades y adjuntar hoja de seguridad. Tipo y características (CRETIB), volumen de uso y almacenamiento, etapa o proceso, destino o uso final y tipo de transportación.");
@@ -236,7 +241,7 @@
           head:["Producto","Estado físico","Categoría","Clave CRETIB","No. CAS","Capacidad (m³)","Proveedor"],
           k:"auto", rows: Object.keys(D.SUSTANCIAS).map(n=>{ const c=D.SUSTANCIAS[n]; const s=state.sustancias[n]||{};
             return [n, c.estado, c.categoria, c.cretib, c.cas, s.cap||"", s.prov||""]; }) });
-    FIG("f13", "Figura 11. Hoja de seguridad de las sustancias (anexo)");
+    FIGAREA("f13");
     H(4, "III.2.2 Sustancias químicas peligrosas de uso en construcción");
     TBL({ title:"Tabla III.8. Sustancias químicas peligrosas en construcción",
           head:["Producto (nombre comercial)","Volúmenes","Estado físico","Clave CRETIB","No. CAS","Área de uso","Proveedor"],
@@ -263,40 +268,40 @@
     I("Señalar sitios/etapas con emisiones de ruido (revisar NOM-081-SEMARNAT-1994).");
     H(4, "III.3.5 Diagrama de entradas y flujos");
     I("Diagrama de flujo que muestre entradas y salidas de insumos por etapa, con rutas y balances de materias primas, almacenamientos, productos y subproductos.");
-    FIG("f14", "Figura 12. Diagrama de entradas y flujos por etapa");
+    FIGAREA("f14");
 
     H(3, "III.4 Diagnóstico del entorno ambiental en el área de influencia");
     I("Presentar un diagnóstico ambiental objetivo de la calidad de los aspectos bióticos y abióticos del entorno, delimitando el área de influencia (AI) y representando en planos, mapas, esquemas y anexos fotográficos el estado de conservación.");
     H(4, "III.4.1 Justificación del Área de Influencia (AI)");
     I("Definir AI primaria (predio y colindancias) y, si aplica, AI secundaria (aire/agua/ruido/movilidad). Justificar con tipo de proyecto, vientos dominantes y receptores sensibles. Fuentes: INEGI, SMN, planeación urbana municipal/POEL/POET.");
-    FIG("f15", "Figura 13. Delimitación del Área de Influencia (AI)");
+    FIGAREA("f15");
     H(4, "III.4.2 Identificación de aspectos abióticos");
     I("Describir condiciones físicas y de calidad ambiental actuales. Fuentes transversales: INEGI (edafología, geología, hidrología, uso de suelo), CONAGUA (cuencas/subcuencas, REPDA), SIORE (Ordenamientos/UGA), atlas de riesgo municipal/estatal.");
     I("Clima: régimen de vientos (rosas), precipitación y temperatura; clasificación de Köppen modificada por E. García (1981).");
-    FIG("f16", "Figura 14. Carta de climas");
+    FIGAREA("f16");
     TBL({ title:"Tabla III.11. Distribución de climas (clasificación de Köppen-García)", head:["Código","Descripción"], k:"scaffold", rows: empty(2,2) });
     I("Geología y geomorfología: unidades geológicas, pendientes y procesos (inundación, subsidencia); estabilidad del sitio y drenajes.");
-    FIG("f17", "Figura 15. Curvas de nivel y altitud (topografía)");
-    FIG("f18", "Figura 16. Carta geológica");
+    FIGAREA("f17");
+    FIGAREA("f18");
     I("Edafología: tipos de suelo, textura, drenaje y vulnerabilidad a contaminación; profundidad y compactación.");
-    FIG("f19", "Figura 17. Carta edafológica (tipos de suelo)");
+    FIGAREA("f19");
     TBL({ title:"Tabla III.12. Tipo de suelo presente en el sitio", head:["Unidad de suelo","Descripción"], k:"scaffold", rows: empty(3,2) });
     I("Hidrología: región hidrológica (con código), cuenca y subcuenca; cauces, zonas de inundación y descargas cercanas.");
-    FIG("f20", "Figura 18. Mapa de hidrología superficial");
+    FIGAREA("f20");
     TBL({ title:"Tabla III.13. Regiones, cuencas y subcuencas del AI", head:["Región Hidrológica","Cuenca","Subcuenca"], k:"scaffold", rows: empty(2,3) });
     I("Acuíferos: localización, disponibilidad media anual de agua subterránea, profundidad al nivel freático y vulnerabilidad a infiltración de hidrocarburos (NOM-011-CONAGUA-2000).");
-    FIG("f21", "Figura 19. Mapa de acuíferos / NDWI");
+    FIGAREA("f21");
     TBL({ title:"Tabla III.14. Región hidrológico-administrativa (acuífero)",
           head:["Clave","Acuífero","R","DNCOM","VCAS","VEXTET","DAS","Déficit"], k:"scaffold", rows: empty(2,8) });
     H(4, "III.4.3 Identificación de aspectos bióticos");
     I("Caracterización de vegetación (tipo/cobertura/estado, base fisonómica florística de Rzedowski 1978) y fauna asociada (mamíferos, aves, anfibios y reptiles), con listados bibliográficos y estatus NOM-059-SEMARNAT. Fuentes: CONABIO (USV, SNIB, Enciclovida), CONANP.");
-    FIG("f22", "Figura 20. Plano de cobertura vegetal del AI");
-    FIG("f23", "Figura 21. Mapa de NDVI del AI");
+    FIGAREA("f22");
+    FIGAREA("f23");
     TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(12,4) });
     TBL({ title:"Tabla III.16. Listado de mamíferos potencialmente presentes en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(8,4) });
     TBL({ title:"Tabla III.17. Listado de avifauna potencialmente presente en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(10,4) });
     TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(8,4) });
-    FIG("f24", "Figura 22. Evidencia fotográfica de flora/fauna identificada en el predio");
+    FIGAREA("f24");
     H(4, "III.4.4 Medio socioeconómico y cultural");
     I("Densidad poblacional, pueblos originarios, desempleo, economía, vivienda, rezago social, zonas de atención prioritaria, valor cultural y patrimonio (INEGI Censo, INAH, CONABIO, CONANP).");
     TBL({ title:"Tabla III.19. Datos de población (últimos 3 años) del municipio de " + g("municipio","______"),
@@ -308,18 +313,18 @@
           rows:[["Índice de fecundidad",""],["Población indígena (%)",""],["Población ocupada >12 años",""],
                 ["Viviendas particulares habitadas",""],["Viviendas con electricidad",""],["Viviendas con agua entubada",""],
                 ["Viviendas con drenaje/excusado",""],["Viviendas con internet",""]] });
-    FIG("f25", "Figura 23. Mapa de zonas de atención prioritaria");
+    FIGAREA("f25");
     H(4, "III.4.5 Análisis de cercanía (radio del AI, máx. 2.0 km)");
     I("Funcionalidad y servicios ecosistémicos; consideraciones normativas de distancias y compatibilidad; receptores sensibles dentro del radio; evaluación de riesgo y sensibilidad.");
-    FIG("f26", "Figura 24. Análisis de cercanía a 2.0 km y receptores sensibles");
+    FIGAREA("f26");
     H(4, "III.4.6 Diagnóstico ambiental");
     I("Integrar lo anterior para concluir el estado de conservación/deterioro del AI y riesgos preexistentes; interacciones del sistema ambiental, subsistemas y Modelo Ecológico Conceptual (MEC).");
-    FIG("f27", "Figura 25. Subsistemas e interacciones del Sistema Ambiental (diagrama de flujo)");
+    FIGAREA("f27");
     if (state.incluirMEC !== false) {
       H(4, "Principios básicos del Modelo Ecológico Conceptual (MEC)");
       P(D.BOILER.mec);
-      FIG("f28", "Figura 26. Componentes básicos de un MEC (Ogden et al., 2005)");
-      FIG("f29", "Figura 27. Ejemplo de MEC parcial para el proyecto");
+      FIGAREA("f28");
+      FIGAREA("f29");
     }
 
     H(3, "III.5 Identificación de impactos ambientales");
@@ -331,7 +336,7 @@
             head:["Criterio","0","1","2","3","4","5"], rows: CRITERIOS });
       TBL({ title:"Tabla III.23. Rangos de clasificación de significancia (ISIG)", k:"auto",
             head:["Rango (0–100)","Clase","Interpretación"], rows: RANGOS_ISIG });
-      FIG("f30", "Figura 28. Diagrama de flujo de la metodología de evaluación de impacto");
+      FIGAREA("f30");
     }
     H(4, "III.5.2 Alcance y fuentes de información");
     I("Definir fases (preparación/construcción/operación/mantenimiento/abandono), medios ambientales y fuentes (memoria técnica, P&ID/planos, diagnóstico III.4 y MEC, NOM y mediciones). Exponer supuestos operativos (horarios, caudales, throughput).");
@@ -343,13 +348,13 @@
           head:["Medio","Sistema","Componente","Factor","Regulador (NOM)"], k:"auto", rows: COMPONENTES });
     H(4, "III.5.5 Cruce de interacciones (matriz de Leopold adaptada)");
     I("Construir la matriz de Leopold (acción × factor), marcar solo interacciones con vía de exposición plausible y asignar ±M (0–5).");
-    FIG("f31", "Figura 29. Matriz de Leopold adaptada (anexo)");
+    FIGAREA("f31");
     TBL({ title:"Tabla III.25. Resumen de identificación de impactos por etapa",
           head:["Etapa","Positivos (+)","Negativos (−)","Total"], k:"scaffold",
           rows:[["Preparación de sitio y construcción","","",""],["Operación y mantenimiento","","",""],["Abandono de sitio","","",""],["Total","","",""]] });
     H(4, "III.5.6 Evaluación de criterios e índices");
     I("Construir la matriz de resultados con cálculos de índices (intensidad, básico, complementario, significancia), clase, medida, NOM y evidencia.");
-    FIG("f32", "Figura 30. Matriz de resultados con cálculo de índices (anexo)");
+    FIGAREA("f32");
     H(4, "III.5.7 Descripción de impactos");
     I("Identificar y describir los impactos más significativos (narrativa técnica de los “altos” y “medios” + medidas) por medio físico, biológico y socioeconómico, incluyendo riesgo tecnológico.");
     H(4, "III.5.8 Balance de impacto");
@@ -392,13 +397,11 @@
 
     H(1, "VI. Planos y cartografía");
     I("Anexar planos y cartografía: localización a 4 niveles, plano arquitectónico, mapas temáticos (clima, geología, edafología, hidrología, NDVI/NDWI, UGA, ANP), área de influencia y matriz de Leopold.");
-    FIG("f33", "Figura 31. Plano general / cartografía del proyecto (anexo)");
-
-    // Imágenes adicionales (anexo fotográfico) cargadas por el usuario
-    const extra = Array.isArray(state.extraFigs) ? state.extraFigs : [];
-    if (extra.length) {
+    FIGAREA("f33");
+    // Figuras adicionales que agregue el usuario (anexo fotográfico)
+    if (((ctx.figsByArea && ctx.figsByArea["anexo"]) || []).length) {
       H(3, "Anexo fotográfico y de cartografía adicional");
-      extra.forEach((f, i) => FIG(f.id, f.caption || ("Figura adicional " + (i+1))));
+      FIGAREA("anexo");
     }
 
     H(2, "Referencias");

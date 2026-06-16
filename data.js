@@ -207,9 +207,53 @@
     ["Equipamiento e Infraestructura (EI)","10. Programa de reducción, recolección y reciclaje de desechos sólidos.","El proyecto contempla el manejo y disposición de sus residuos conforme a la Ley General para la Prevención y Gestión Integral de los Residuos."]
   ];
 
+  // -------------------------------------------------------------------
+  // 9) ÁREAS DE FIGURAS — cada lugar del documento donde van imágenes.
+  //    id, sec (sección del cuestionario), título por defecto, y flags:
+  //    numbered:false (portada, sin "Figura N."), gatedBy (depende de un toggle).
+  //    La numeración "Figura N." se calcula sola en orden de documento.
+  // -------------------------------------------------------------------
+  const A = (id, sec, def, opts) => Object.assign({ id, sec, defaults: def!=null?[def]:[] }, opts||{});
+  const AREAS = [
+    A("f01","portada","Logo de empresa",{numbered:false}),
+    A("f02","portada","Foto / diseño relacionado al proyecto (portada)",{numbered:false}),
+    A("f03","II2","Mapa de Unidad Ambiental Biofísica (UAB)"),
+    A("f04","II3","Mapa de UGA del Ordenamiento Ecológico Territorial estatal (SIGEIA)"),
+    A("f05","II3","Mapa del Programa de Ordenamiento Ecológico Local (POEL) del municipio"),
+    A("f06","III1","Mapa de macrolocalización (nivel nacional)"),
+    A("f07","III1","Mapa de localización (nivel estatal)"),
+    A("f08","III1","Mapa de localización (nivel municipal)"),
+    A("f09","III1","Mapa de microlocalización (predio del proyecto)"),
+    A("f10","III1","Evidencia fotográfica de colindancias"),
+    A("f11","III1","Plano arquitectónico / croquis del proyecto"),
+    A("f12","III1","Diagrama de flujo del proceso operativo"),
+    A("f13","III2","Hoja de seguridad de las sustancias (anexo)"),
+    A("f14","III3","Diagrama de entradas y flujos por etapa"),
+    A("f15","III4","Delimitación del Área de Influencia (AI)"),
+    A("f16","III4","Carta de climas"),
+    A("f17","III4","Curvas de nivel y altitud (topografía)"),
+    A("f18","III4","Carta geológica"),
+    A("f19","III4","Carta edafológica (tipos de suelo)"),
+    A("f20","III4","Mapa de hidrología superficial"),
+    A("f21","III4","Mapa de acuíferos / NDWI"),
+    A("f22","III4","Plano de cobertura vegetal del AI"),
+    A("f23","III4","Mapa de NDVI del AI"),
+    A("f24","III4","Evidencia fotográfica de flora/fauna identificada en el predio"),
+    A("f25","III4","Mapa de zonas de atención prioritaria"),
+    A("f26","III4","Análisis de cercanía a 2.0 km y receptores sensibles"),
+    A("f27","III4","Subsistemas e interacciones del Sistema Ambiental (diagrama de flujo)"),
+    A("f28","III4","Componentes básicos de un MEC (Ogden et al., 2005)",{gatedBy:"incluirMEC"}),
+    A("f29","III4","Ejemplo de MEC parcial para el proyecto",{gatedBy:"incluirMEC"}),
+    A("f30","III5","Diagrama de flujo de la metodología de evaluación de impacto",{gatedBy:"incluirMetodo"}),
+    A("f31","III5","Matriz de Leopold adaptada (anexo)"),
+    A("f32","III5","Matriz de resultados con cálculo de índices (anexo)"),
+    A("f33","anexos","Plano general / cartografía del proyecto (anexo)"),
+    A("anexo","anexos",null)   // figuras adicionales que agregue el usuario
+  ];
+
   window.IPDATA = {
     CONSULTORA, SUSTANCIAS, BOILER, REFERENCIAS,
     ESTRATEGIAS_POEGT, DISPOSICIONES, ESTADOS, LISTA_ESTADOS, INSTRUMENTOS,
-    CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID
+    CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID, AREAS
   };
 })();
