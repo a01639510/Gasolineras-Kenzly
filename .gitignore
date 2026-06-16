@@ -1,0 +1,10 @@
+# Archivos temporales de Office / Word
+~$*
+*.tmp
+
+# macOS
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
