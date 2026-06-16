@@ -6,43 +6,47 @@
 <title>Cuestionario IP — Informe Preventivo ASEA (Verde Raíz)</title>
 <style>
   :root{
-    --verde:#1f6b3b; --verde2:#2e8b57; --verde-claro:#e8f3ec;
-    --gris:#5b6770; --linea:#d7dde2; --bg:#f4f6f7; --amber:#b8860b; --amber-bg:#fff6e0;
-    --azul:#1f4e79;
+    --verde:#0e3b29; --verde2:#17533a; --verde-dark:#0a2c1f; --verde-claro:#eef3f0; --verde-tint:#e3ece6;
+    --oro:#b8923f; --gris:#5d6b63; --linea:#e0e5e2; --bg:#f2f5f3; --amber:#9a7b1f; --amber-bg:#fbf3df;
+    --azul:#1f4e79; --tinta:#1c2622;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#222;background:var(--bg)}
-  header.app{background:linear-gradient(135deg,var(--verde),var(--verde2));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-  header.app h1{font-size:18px;margin:0;font-weight:600}
-  header.app .sub{font-size:12px;opacity:.9}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:var(--tinta);background:var(--bg);-webkit-font-smoothing:antialiased}
+  header.app{background:linear-gradient(180deg,var(--verde),var(--verde-dark));color:#fff;padding:12px 26px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;border-bottom:3px solid var(--oro);box-shadow:0 4px 16px rgba(10,30,20,.20)}
+  header.app .brand{display:flex;align-items:center;gap:13px}
+  header.app .mark{width:38px;height:38px;border:1.5px solid rgba(255,255,255,.5);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:1px;flex:none}
+  header.app h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
+  header.app .sub{font-size:11px;opacity:.78;letter-spacing:.2px;margin-top:2px}
   header.app .spacer{flex:1}
-  .btn{border:0;border-radius:7px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:var(--verde);transition:.15s}
-  .btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.18)}
-  .btn.ghost{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.5)}
-  .btn.amber{background:var(--amber);color:#fff}
-  .layout{display:grid;grid-template-columns:230px 1fr;gap:0;min-height:calc(100vh - 56px)}
-  nav.toc{background:#fff;border-right:1px solid var(--linea);padding:14px 0;position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto}
-  nav.toc a{display:block;padding:7px 18px;font-size:13px;color:var(--gris);text-decoration:none;border-left:3px solid transparent}
-  nav.toc a:hover{background:var(--verde-claro)}
-  nav.toc a.active{border-left-color:var(--verde);color:var(--verde);font-weight:600;background:var(--verde-claro)}
-  nav.toc .grp{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#9aa3ab;padding:12px 18px 4px}
-  main{padding:22px 28px;max-width:920px}
-  .progress{height:8px;background:#e3e8eb;border-radius:6px;overflow:hidden;margin-bottom:18px}
+  .btn{border:1px solid transparent;border-radius:5px;padding:8px 13px;font-size:12.5px;font-weight:600;cursor:pointer;background:#fff;color:var(--verde);transition:.15s;letter-spacing:.2px}
+  .btn:hover{box-shadow:0 2px 9px rgba(10,30,20,.22)}
+  .btn.ghost{background:transparent;color:var(--verde-claro);border:1px solid rgba(255,255,255,.38)}
+  .btn.ghost:hover{background:rgba(255,255,255,.1)}
+  .btn.amber{background:var(--oro);color:#fff}
+  .layout{display:grid;grid-template-columns:248px 1fr;gap:0;min-height:calc(100vh - 58px)}
+  nav.toc{background:#fff;border-right:1px solid var(--linea);padding:10px 0;position:sticky;top:58px;height:calc(100vh - 58px);overflow:auto}
+  nav.toc a{display:block;padding:7px 20px;font-size:12.5px;color:var(--gris);text-decoration:none;border-left:2px solid transparent}
+  nav.toc a:hover{background:var(--verde-claro);color:var(--verde)}
+  nav.toc a.active{border-left-color:var(--verde);color:var(--verde);font-weight:600;background:var(--verde-tint)}
+  nav.toc .grp{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#9aa9a0;padding:14px 20px 4px;font-weight:700}
+  main{padding:26px 32px;max-width:880px}
+  .progress{height:6px;background:#e2e8e4;border-radius:3px;overflow:hidden;margin-bottom:22px}
   .progress > div{height:100%;background:linear-gradient(90deg,var(--verde2),var(--verde));width:0;transition:width .3s}
-  section.card{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:18px 20px;margin-bottom:18px;scroll-margin-top:70px}
-  section.card > h2{margin:0 0 4px;font-size:16px;color:var(--verde)}
-  section.card > .desc{font-size:12px;color:var(--gris);margin-bottom:14px}
+  section.card{background:#fff;border:1px solid var(--linea);border-radius:6px;padding:20px 22px;margin-bottom:16px;scroll-margin-top:74px;box-shadow:0 1px 2px rgba(20,40,30,.04)}
+  section.card > h2{margin:0 0 4px;font-size:15px;color:var(--verde);font-weight:700;letter-spacing:.2px;padding-left:11px;border-left:3px solid var(--verde)}
+  section.card > .desc{font-size:12px;color:var(--gris);margin:6px 0 16px;line-height:1.5}
   .field{margin-bottom:13px}
   .field label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
   .field .hint{font-size:11px;color:var(--gris);font-weight:400}
-  .field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--linea);border-radius:6px;font-size:13px;font-family:inherit;background:#fff}
+  .field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--linea);border-radius:5px;font-size:13px;font-family:inherit;background:#fcfdfc;transition:.15s}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--verde2);box-shadow:0 0 0 3px rgba(23,83,58,.12);background:#fff}
   .field textarea{min-height:64px;resize:vertical}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-  .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.3px;vertical-align:middle;margin-left:6px}
-  .badge.cerrada{background:#e3f0ff;color:var(--azul)}
-  .badge.boiler{background:var(--verde-claro);color:var(--verde)}
-  .badge.abierta{background:var(--amber-bg);color:var(--amber)}
+  .badge{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:3px;text-transform:uppercase;letter-spacing:.4px;vertical-align:middle;margin-left:6px;border:1px solid transparent}
+  .badge.cerrada{background:#eaf1f8;color:var(--azul);border-color:#d4e2f0}
+  .badge.boiler{background:var(--verde-tint);color:var(--verde);border-color:#cfe0d6}
+  .badge.abierta{background:var(--amber-bg);color:#7a6116;border-color:#ecdcae}
   .open-note{background:var(--amber-bg);border:1px dashed var(--amber);border-radius:8px;padding:10px 12px;font-size:12px;color:#6b5300;margin-bottom:12px}
   .open-note b{color:var(--amber)}
   details.boiler-prev{margin-top:6px;border:1px solid var(--linea);border-radius:6px;background:#fafcfb}
@@ -55,14 +59,14 @@
   .chk{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0}
   .chk input{width:auto}
   /* ---------- Vista previa / documento ---------- */
-  #previewWrap{display:none;background:#666;padding:24px;min-height:100vh}
+  #previewWrap{display:none;background:#3a4742;padding:24px;min-height:100vh}
   .doc{background:#fff;max-width:760px;margin:0 auto;padding:60px 70px;font-family:"Times New Roman",Georgia,serif;color:#111;font-size:13px;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,.3)}
   .doc h1.cover{font-size:30px;letter-spacing:8px;text-align:center;color:var(--verde);margin:40px 0 0}
   .doc .cover-sub{text-align:center;color:var(--gris);font-size:14px;margin:6px 0 30px}
   .doc .cover-box{border:2px solid var(--verde);border-radius:10px;padding:24px;text-align:center;margin:30px 0}
   .doc .cover-box .proj{font-size:20px;font-weight:bold;margin:6px 0}
   .doc h2{font-size:16px;color:var(--verde);border-bottom:2px solid var(--verde);padding-bottom:3px;margin-top:26px}
-  .doc h3{font-size:14px;color:#1a4d2e;margin-top:18px}
+  .doc h3{font-size:14px;color:#17533a;margin-top:18px}
   .doc h4{font-size:13px;color:#333;margin-top:12px}
   .doc p{margin:7px 0;text-align:justify}
   .doc table{border-collapse:collapse;width:100%;margin:10px 0;font-size:12px}
@@ -72,10 +76,10 @@
   .doc .toc-line{display:flex;justify-content:space-between;border-bottom:1px dotted #bbb;font-size:12px;padding:2px 0}
   .doc .firma{margin-top:40px;display:flex;justify-content:space-between;gap:30px}
   .doc .firma div{flex:1;text-align:center;border-top:1px solid #333;padding-top:6px;font-size:12px}
-  .toolbar-prev{position:sticky;top:0;background:#333;padding:10px 20px;display:flex;gap:10px;align-items:center;z-index:5;margin:-24px -24px 24px;flex-wrap:wrap}
-  .toolbar-prev .t{color:#cfe6d6;font-size:12px;flex:1;min-width:140px}
-  .seg{display:inline-flex;background:#555;border-radius:8px;padding:3px}
-  .seg-btn{border:0;background:transparent;color:#ddd;font-size:12px;font-weight:600;padding:7px 12px;border-radius:6px;cursor:pointer}
+  .toolbar-prev{position:sticky;top:0;background:var(--verde-dark);padding:11px 20px;display:flex;gap:10px;align-items:center;z-index:5;margin:-24px -24px 24px;flex-wrap:wrap;border-bottom:2px solid var(--oro)}
+  .toolbar-prev .t{color:#b9ccc1;font-size:11.5px;flex:1;min-width:140px}
+  .seg{display:inline-flex;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .seg-btn{border:0;background:transparent;color:#dce8e1;font-size:12px;font-weight:600;padding:7px 13px;border-radius:4px;cursor:pointer}
   .seg-btn.active{background:#fff;color:var(--verde)}
   /* Resaltado del documento */
   .doc .hl-new{background:#FFF59D;border-radius:2px}
@@ -103,9 +107,12 @@
 </head>
 <body>
 <header class="app">
-  <div>
-    <h1>🌿 Cuestionario IP — Informe Preventivo ASEA</h1>
-    <div class="sub">Verde Raíz · Automatización de respuestas cerradas y redactadas-cerradas</div>
+  <div class="brand">
+    <div class="mark">VR</div>
+    <div>
+      <h1>Informe Preventivo ASEA — Cuestionario IP</h1>
+      <div class="sub">Verde Raíz · Consultoría Ambiental · Sector Hidrocarburos</div>
+    </div>
   </div>
   <div class="spacer"></div>
   <button class="btn ghost" id="btnGuardar">💾 Guardar JSON</button>

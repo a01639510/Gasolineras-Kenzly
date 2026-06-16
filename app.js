@@ -417,18 +417,18 @@
     return `<style>
       @page{size:A4;margin:2.2cm}
       body{font-family:"Times New Roman",serif;font-size:11pt;line-height:1.45;color:#000}
-      h1.cover{font-size:30pt;text-align:center;letter-spacing:8pt;color:#1f6b3b;margin-top:60pt}
+      h1.cover{font-size:30pt;text-align:center;letter-spacing:8pt;color:#0e3b29;margin-top:60pt}
       .cover-sub{text-align:center;color:#555;font-size:13pt}
-      .cover-box{border:2pt solid #1f6b3b;padding:18pt;text-align:center;margin:24pt 0}
+      .cover-box{border:2pt solid #0e3b29;padding:18pt;text-align:center;margin:24pt 0}
       .cover-box .proj{font-size:18pt;font-weight:bold}
-      h2{font-size:15pt;color:#1f6b3b;border-bottom:1.5pt solid #1f6b3b;page-break-after:avoid;margin-top:18pt}
+      h2{font-size:15pt;color:#0e3b29;border-bottom:1.5pt solid #0e3b29;page-break-after:avoid;margin-top:18pt}
       h2.chap{font-size:17pt;page-break-before:always}
-      h3{font-size:13pt;color:#1a4d2e;page-break-after:avoid}
+      h3{font-size:13pt;color:#17533a;page-break-after:avoid}
       h4{font-size:12pt;color:#333;page-break-after:avoid}
       p{text-align:justify;margin:6pt 0}
       table{border-collapse:collapse;width:100%;margin:8pt 0}
       th,td{border:0.75pt solid #666;padding:3pt 5pt;font-size:9.5pt;vertical-align:top}
-      th{background:#e8f3ec}
+      th{background:#eef3f0}
       td.band{background:#d7e8dc;font-weight:bold}
       .toc-line{font-size:10.5pt;border-bottom:1px dotted #aaa}
       .instr{background:#FFE8A3;border-left:3pt solid #b8860b;padding:4pt 8pt;font-style:italic;font-size:9.5pt;color:#5b4600;margin:5pt 0}
