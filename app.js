@@ -9,6 +9,52 @@
   const esc = (s) => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const STORE = "verde_raiz_ip_v1";
 
+  // ============== BUCKET DE IMÁGENES (IndexedDB) ==============
+  // Almacén local capaz de guardar muchas imágenes (cientos de MB), offline.
+  const IMG_DB="verde_raiz_img", IMG_STORE="img";
+  let imgCache = {};   // { figId: dataURL }  (en memoria, espejo del IDB)
+  function idbOpen(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open(IMG_DB,1);
+      r.onupgradeneeded=()=>{ r.result.createObjectStore(IMG_STORE); };
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+    });
+  }
+  async function idbAll(){
+    try{ const db=await idbOpen();
+      return await new Promise((res,rej)=>{
+        const out={}, cur=db.transaction(IMG_STORE,"readonly").objectStore(IMG_STORE).openCursor();
+        cur.onsuccess=e=>{ const c=e.target.result; if(c){ out[c.key]=c.value; c.continue(); } else res(out); };
+        cur.onerror=()=>rej(cur.error);
+      });
+    }catch(e){ return {}; }
+  }
+  async function idbPut(id,v){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction(IMG_STORE,"readwrite"); tx.objectStore(IMG_STORE).put(v,id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+  async function idbDel(id){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction(IMG_STORE,"readwrite"); tx.objectStore(IMG_STORE).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+
+  // Redimensiona la imagen (máx 1600 px) y devuelve dataURL para guardar.
+  function fileToDataURL(file, maxDim=1600, q=0.85){
+    return new Promise((res,rej)=>{
+      const fr=new FileReader();
+      fr.onload=()=>{ const img=new Image();
+        img.onload=()=>{ let w=img.width,h=img.height;
+          if(Math.max(w,h)>maxDim){ const s=maxDim/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+          const c=document.createElement("canvas"); c.width=w; c.height=h;
+          c.getContext("2d").drawImage(img,0,0,w,h);
+          const png=/png/i.test(file.type);
+          res(c.toDataURL(png?"image/png":"image/jpeg", png?undefined:q));
+        };
+        img.onerror=()=>rej(new Error("img")); img.src=fr.result; };
+      fr.onerror=()=>rej(fr.error); fr.readAsDataURL(file);
+    });
+  }
+  async function setImagen(id,file){
+    if(!file || !file.type.startsWith("image/")){ toast("Selecciona un archivo de imagen"); return; }
+    try{ const url=await fileToDataURL(file); imgCache[id]=url; await idbPut(id,url); renderImagenes(); toast("Imagen cargada ✓"); }
+    catch(e){ toast("No se pudo procesar la imagen"); }
+  }
+  async function delImagen(id){ delete imgCache[id]; try{ await idbDel(id); }catch(e){} renderImagenes(); }
+
   // ---- Estado ----
   let state = load() || {
     sustancias: { "Gasolina regular":{cap:"",prov:""}, "Gasolina Premium":{cap:"",prov:""}, "Diésel Automotriz":{cap:"",prov:""} },
@@ -24,6 +70,7 @@
     if(!Array.isArray(state.instrumentos) || state.instrumentos.length!==D.INSTRUMENTOS.length)
       state.instrumentos=D.INSTRUMENTOS.map(i=>({sel:i.sel}));
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
+    if(!Array.isArray(state.extraFigs)) state.extraFigs=[];
   }
   function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
   function g(id, def=""){ return state[id]!=null && state[id]!=="" ? state[id] : def; }
@@ -163,10 +210,60 @@
       sec.fields.forEach(f=>{ formHtml+=renderField(f); });
       formHtml+=`</section>`;
     });
+    // Sección de IMÁGENES (mapas y figuras)
+    tocHtml+=`<div class="grp">Imágenes</div><a href="#sec-imagenes" data-sec="imagenes">Imágenes (mapas y figuras)</a>`;
+    formHtml+=`<section class="card" id="sec-imagenes">
+      <h2>Imágenes (mapas y figuras)</h2>
+      <div class="desc">Sube aquí cada figura del documento. Se guardan en este dispositivo (bucket local) y aparecen con su pie <b>“Figura X. …”</b> tanto en la vista previa como en el Word. Puedes agregar imágenes/mapas adicionales al final.</div>
+      <div id="imgCards"></div>
+      <button class="btn imgadd" id="btnAddFig" type="button">➕ Agregar imagen / mapa adicional</button>
+    </section>`;
     toc.innerHTML=tocHtml; form.innerHTML=formHtml;
     bindInputs();
+    renderImagenes();
+    $("#btnAddFig").onclick=addExtraFig;
     setupScrollSpy();
     updateProgress();
+  }
+
+  // Render del panel de imágenes (inputs por figura, con miniatura)
+  function renderImagenes(){
+    const cont=$("#imgCards"); if(!cont) return;
+    const figs=figList(); let html=""; let lastChap=null;
+    const extraIds = new Set((state.extraFigs||[]).map(f=>f.id));
+    figs.forEach(f=>{
+      if(f.chap!==lastChap){ html+=`<div class="imgchap">${esc(f.chap)}</div>`; lastChap=f.chap; }
+      const src=imgCache[f.id]; const isExtra=extraIds.has(f.id);
+      html+=`<div class="imgrow">
+        <div class="imgthumb ${src?'has':''}" data-pick="${esc(f.id)}">${ src?`<img src="${src}" alt="">`:`<span>🖼️</span>` }</div>
+        <div class="imgmeta">
+          <div class="imgcap">${esc(f.caption)}</div>
+          <div class="imgacts">
+            <label class="imglink">${src?'Reemplazar':'Subir imagen'}<input type="file" accept="image/*" data-fig="${esc(f.id)}" hidden></label>
+            ${ src?`<button type="button" class="imglink danger" data-figclear="${esc(f.id)}">Quitar imagen</button>`:'' }
+            ${ isExtra?`<button type="button" class="imglink danger" data-figremove="${esc(f.id)}">Eliminar figura</button>`:'' }
+          </div>
+        </div>
+      </div>`;
+    });
+    cont.innerHTML=html;
+    cont.querySelectorAll("input[type=file][data-fig]").forEach(inp=>inp.onchange=e=>{ const file=e.target.files[0]; if(file) setImagen(inp.dataset.fig,file); });
+    cont.querySelectorAll(".imgthumb[data-pick]").forEach(t=>t.onclick=()=>{ const i=cont.querySelector(`input[data-fig="${t.dataset.pick}"]`); if(i) i.click(); });
+    cont.querySelectorAll("[data-figclear]").forEach(b=>b.onclick=()=>delImagen(b.dataset.figclear));
+    cont.querySelectorAll("[data-figremove]").forEach(b=>b.onclick=()=>removeExtraFig(b.dataset.figremove));
+  }
+
+  function addExtraFig(){
+    const cap=prompt("Pie de la figura (p. ej. “Figura 32. Vista panorámica del predio”):","");
+    if(cap===null) return;
+    const id="x_"+Date.now().toString(36);
+    state.extraFigs.push({ id, caption: cap.trim() || ("Figura adicional ("+(state.extraFigs.length+1)+")") });
+    save(); renderImagenes();
+    toast("Figura agregada — ahora súbele una imagen");
+  }
+  function removeExtraFig(id){
+    state.extraFigs=(state.extraFigs||[]).filter(f=>f.id!==id);
+    save(); delImagen(id); // delImagen ya llama renderImagenes()
   }
 
   function renderField(f){
@@ -316,9 +413,19 @@
   function makeCtx(){ return { g, v:vars(), interp, money:fmtMoney, state, D }; }
   function buildBlocks(){ return window.IPDOC.build(makeCtx()); }
 
-  // Cuenta áreas pendientes (instrucciones + tablas por llenar)
+  // Cuenta áreas pendientes (instrucciones + tablas por llenar + figuras sin imagen)
   function contarPendientes(blocks){
-    return blocks.filter(b => (b.t==="p" && b.k==="instr") || (b.t==="table" && b.k==="scaffold") || b.t==="fig").length;
+    return blocks.filter(b => (b.t==="p" && b.k==="instr") || (b.t==="table" && b.k==="scaffold") || (b.t==="fig" && !imgCache[b.id])).length;
+  }
+
+  // Lista de figuras (con su capítulo) derivada del propio documento.
+  function figList(){
+    const blocks=buildBlocks(); const out=[]; let chap="General";
+    for(const b of blocks){
+      if(b.t==="h" && b.n===1) chap=b.x;
+      else if(b.t==="fig") out.push({ id:b.id, caption:b.caption, chap });
+    }
+    return out;
   }
   function contarNuevos(blocks){
     return blocks.filter(b => (b.t==="p" && b.k==="auto") || (b.t==="table" && b.k==="auto")).length;
@@ -378,9 +485,12 @@
         case "table":
           h += renderTabla(b, modo);
           break;
-        case "fig":
-          h += `<div class="figbox"><div class="figicon">🖼️</div><div class="figcap">${esc(b.caption)} <span class="pend-tag">— imagen pendiente</span></div></div>`;
+        case "fig": {
+          const src = imgCache[b.id];
+          if(src) h += `<figure class="figimg"><img src="${src}" alt="${esc(b.caption)}"><figcaption>${esc(b.caption)}</figcaption></figure>`;
+          else h += `<div class="figbox"><div class="figicon">🖼️</div><div class="figcap">${esc(b.caption)} <span class="pend-tag">— imagen pendiente</span></div></div>`;
           break;
+        }
         case "firma":
           h += `<div class="firma"><div>Por el promovente<br>${esc(b.promovente)}<br>Fecha: ________</div>
                 <div>Por el responsable técnico<br>${esc(b.tecnico)}<br>Fecha: ________</div></div>`;
@@ -441,6 +551,9 @@
       .figbox{border:1.5pt dashed #b8860b;background:#FFF8E1;text-align:center;padding:22pt 10pt;margin:8pt 0}
       .figicon{font-size:26pt;color:#b8860b}
       .figcap{font-size:9.5pt;color:#5b4600;font-style:italic;margin-top:4pt}
+      .figimg{text-align:center;margin:10pt 0}
+      .figimg img{max-width:100%;border:0.5pt solid #999}
+      .figimg figcaption{font-size:9.5pt;color:#333;font-style:italic;margin-top:4pt}
       .firma{margin-top:30pt}.firma div{display:inline-block;width:45%;border-top:1px solid #000;text-align:center;margin:0 2%;font-size:10pt}
       ul.refs li{font-size:9pt;margin:2pt 0}
     </style>`;
@@ -462,15 +575,25 @@
   }
 
   function guardarJSON(){
-    const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+    // Incluye las imágenes para que el proyecto sea portable (puede pesar).
+    const payload=Object.assign({}, state, { __images: imgCache });
+    const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
     const url=URL.createObjectURL(blob); const a=document.createElement("a");
     const nombre=(g("proyecto","proyecto")||"proyecto").replace(/[^\w]+/g,"_");
     a.href=url; a.download=`IP_datos_${nombre}.json`; a.click(); URL.revokeObjectURL(url);
-    toast("Respuestas guardadas ✓");
+    const n=Object.keys(imgCache).length;
+    toast("Respuestas guardadas ✓" + (n?` (incluye ${n} imágenes)`:""));
   }
   function cargarJSON(file){
     const r=new FileReader();
-    r.onload=()=>{ try{ state=JSON.parse(r.result); normalize(); save(); renderForm(); toast("Respuestas cargadas ✓"); }catch(e){ toast("Archivo inválido"); } };
+    r.onload=async ()=>{ try{
+      const obj=JSON.parse(r.result);
+      const imgs=obj.__images||{}; delete obj.__images;
+      state=obj; normalize(); save();
+      imgCache=imgs;
+      try{ for(const id in imgs){ await idbPut(id, imgs[id]); } }catch(e){}
+      renderForm(); toast("Respuestas cargadas ✓");
+    }catch(e){ toast("Archivo inválido"); } };
     r.readAsText(file);
   }
 
@@ -480,6 +603,11 @@
   function init(){
     normalize();
     renderForm();
+    // Carga el bucket de imágenes (async) y refresca cuando esté listo
+    idbAll().then(m=>{ imgCache=m; renderImagenes();
+      if($("#previewWrap") && $("#previewWrap").style.display==="block") mostrarVista();
+      updateProgress();
+    });
     $("#btnVista").onclick=()=>mostrarVista("borrador");
     $("#btnVista2").onclick=()=>mostrarVista("borrador");
     $("#btnVolver").onclick=volver;

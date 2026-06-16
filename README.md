@@ -16,7 +16,8 @@ Funciona con **doble clic** (un archivo HTML + JS), **sin instalación ni intern
    - 🟠 **Abierta ✎** — requiere redacción/mapas/matrices manuales; se conserva la guía del formato.
 3. Al elegir el **Estado** se autocargan el **Plan Estatal** y los **criterios UGA** (incluidos **Jalisco** e **Hidalgo**).
 4. **Ver documento** → conmuta entre Borrador y Documento limpio.
-5. **Descarga Word** (borrador/limpio), imprime a **PDF**, o **Guarda/Carga JSON** para reutilizar las respuestas.
+5. **Imágenes:** en la sección **“Imágenes (mapas y figuras)”** sube cada figura (mapas, croquis, fotos). Se guardan en un **bucket local (IndexedDB)** en tu dispositivo — admite muchas imágenes — y aparecen con su pie **“Figura X. …”** en la vista previa y en el Word. Puedes agregar figuras adicionales (anexo fotográfico).
+6. **Descarga Word** (borrador/limpio), imprime a **PDF**, o **Guarda/Carga JSON** (el JSON incluye las imágenes, así el proyecto es portable) para reutilizar las respuestas.
 
 > Los datos sensibles (RFC, CURP) **nunca salen del equipo**: todo es local (localStorage + archivos).
 
