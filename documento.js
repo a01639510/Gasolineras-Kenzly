@@ -252,18 +252,41 @@
           head:["Etapa / Actividad"].concat(Array.from({length:24},(_,i)=>String(i+1))), k:"scaffold", rows: gantt(24) });
 
     H(4, "III.1.7 Detalles técnicos");
-    I("A. Condiciones de operación de servicios (agua/energía/drenaje/residuos, procesos, presiones, temperatura, diagrama de flujos). B. Tanques de almacenamiento sujetos a presión (tabla de condiciones operacionales). C. Tuberías y conexiones. D. Maquinaria. E. Controles de medición, seguridad y control; seguridad industrial y atención a emergencias. F. Relación de distancias mínimas. G. Operación y mantenimiento (trasiego, secuencia de maniobra, condiciones de suspensión, mantenimiento y control técnico).");
-    TBL({ title:"Tabla III.3. Condiciones operacionales de tanques de almacenamiento sujetos a presión",
-          head:["ID Tanque","Capacidad (L)","Producto","Presión diseño","Presión operación","Set PSV","Año/Serie","Fabricante","Dictamen/UV"],
-          k:"scaffold", rows: empty(3,9) });
-    TBL({ title:"Tabla III.4. Identificación de tuberías y detalle técnico",
-          head:["Fluido / Servicio","Ø Nominal","Material","Tipo de instalación","Profundidad","Pendiente","Prueba / Dictamen","Observaciones"],
-          k:"scaffold", rows: empty(4,8) });
-    TBL({ title:"Tabla III.5. Identificación y ubicación de extintores",
-          head:["No.","Ubicación","Tipo","Capacidad","Evidencia"], k:"scaffold", rows: empty(4,5) });
-    TBL({ title:"Tabla III.6. Relación de distancias mínimas",
-          head:["Elemento","Distancia requerida (m)","Distancia de proyecto (m)","Cumple"], k:"scaffold", rows: empty(4,4) });
+
+    H(5, "Condiciones de operación de servicios");
+    I("Agua, energía, drenaje y residuos; procesos, presiones y temperatura de operación; diagrama de flujos del sistema.");
     FIGAREA("f12");
+
+    H(5, "Tanques de almacenamiento sujetos a presión");
+    var HTQ=["ID Tanque","Capacidad (L)","Producto","Presión diseño","Presión operación","Set PSV","Año/Serie","Fabricante","Dictamen/UV"];
+    TBL({ title:"Tabla III.3. Condiciones operacionales de tanques de almacenamiento sujetos a presión",
+          head:HTQ, k:tK("tablaTanques"), rows: tRows("tablaTanques",HTQ,3) });
+
+    H(5, "Tuberías y conexiones");
+    I("Tabla mínima obligatoria por línea: identificación, capacidad, presión de diseño/operación, set de PSV, año/serie, fabricante, dictamen/UV y pruebas de hermeticidad realizadas. Simplifica la lectura técnica del dictaminador.");
+    var HTU=["Fluido / Servicio","Ø Nominal","Material","Tipo de instalación","Profundidad","Pendiente","Prueba / Dictamen","Observaciones"];
+    TBL({ title:"Tabla III.4. Identificación de tuberías y detalle técnico",
+          head:HTU, k:tK("tablaTuberias"), rows: tRows("tablaTuberias",HTU,4) });
+
+    H(5, "Maquinaria");
+    I("Maquinaria y equipo por etapa (preparación, construcción, operación y mantenimiento): tipo, cantidad, capacidad y fuente de energía.");
+
+    H(5, "Controles de medición, seguridad y control — Seguridad industrial y atención a emergencias");
+    I("Extintores, kit de derrames, pararrayos, señalética, rutas de evacuación, iluminación de emergencia y equipo de atención a emergencias.");
+    var HEX=["No.","Ubicación","Tipo","Capacidad","Evidencia"];
+    TBL({ title:"Tabla III.5. Identificación y ubicación de extintores",
+          head:HEX, k:tK("tablaExtintores"), rows: tRows("tablaExtintores",HEX,4) });
+
+    H(5, "Características de control preventivas");
+    I("Pruebas de hermeticidad, válvulas de emergencia (shut-off) y monitoreo manual/automático de inventarios y detección de fugas.");
+
+    H(5, "Relación de distancias mínimas");
+    var HDM=["Elemento","Distancia requerida (m)","Distancia de proyecto (m)","Cumple"];
+    TBL({ title:"Tabla III.6. Relación de distancias mínimas",
+          head:HDM, k:tK("tablaDistancias"), rows: tRows("tablaDistancias",HDM,4) });
+
+    H(5, "Operación y mantenimiento");
+    I("Operación de trasiego, insumos indirectos y controles operacionales. Describir: (a) procedimiento durante la descarga; (b) secuencia de maniobra; (c) condiciones en que se suspende la maniobra; y (d) mantenimiento y control técnico.");
 
     H(3, "III.2 Identificación de sustancias o productos");
     I("Mencionar tipo, cantidades y adjuntar hoja de seguridad. Tipo y características (CRETIB), volumen de uso y almacenamiento, etapa o proceso, destino o uso final y tipo de transportación.");

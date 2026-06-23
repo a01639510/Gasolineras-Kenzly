@@ -168,7 +168,15 @@
       {id:"III1abierta", l:"III.1.2–III.1.7 Descripción técnica, dimensiones, programa de trabajo", tipo:"open",
         nota:"Sección ABIERTA: requiere memoria técnica, planos, diagrama de Gantt y detalles de tanques/tuberías/maquinaria. Se conserva la guía ✎ del formato.", b:"abierta"},
       {id:"iaDescTecnica", l:"Descripción técnica (III.1.2–7) — redacción con IA", tipo:"ia", seccion:"descripcion_tecnica", b:"abierta",
-        nota:"Genera la descripción técnica (actividades, dimensiones, programa, tanques/SRV) con IA. Editable; se inserta en III.1."}
+        nota:"Genera la descripción técnica (actividades, dimensiones, programa, tanques/SRV) con IA. Editable; se inserta en III.1."},
+      {id:"tablaDetallesTec", l:"Tablas III.1.7 — tanques, tuberías, extintores, distancias (llenar con IA)", tipo:"tablaIA", b:"abierta",
+        nota:"Pega la memoria técnica / ficha de equipos (o adjunta una imagen) y la IA llena las tablas de tanques, tuberías, extintores y distancias mínimas, SIN límite de filas.",
+        tablas:[
+          {key:"tablaTanques",    titulo:"Tanques sujetos a presión", columnas:["ID Tanque","Capacidad (L)","Producto","Presión diseño","Presión operación","Set PSV","Año/Serie","Fabricante","Dictamen/UV"]},
+          {key:"tablaTuberias",   titulo:"Tuberías y conexiones",     columnas:["Fluido / Servicio","Ø Nominal","Material","Tipo de instalación","Profundidad","Pendiente","Prueba / Dictamen","Observaciones"]},
+          {key:"tablaExtintores", titulo:"Extintores",                columnas:["No.","Ubicación","Tipo","Capacidad","Evidencia"]},
+          {key:"tablaDistancias", titulo:"Distancias mínimas",        columnas:["Elemento","Distancia requerida (m)","Distancia de proyecto (m)","Cumple"]}
+        ]}
     ]},
 
     { id:"III2", grp:"III. Aspectos técnicos", titulo:"III.2 Sustancias peligrosas", desc:"CRETIB y CAS pre-cargados. Sólo ajusta capacidad y proveedor.", fields:[
