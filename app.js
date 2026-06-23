@@ -73,6 +73,7 @@
     if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
     if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
     if(!state.anexos || typeof state.anexos!=="object") state.anexos={};
+    if(!state.tablas || typeof state.tablas!=="object") state.tablas={};
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
@@ -174,7 +175,15 @@
       {id:"III4abierta", l:"Clima, geología, edafología, hidrología, flora/fauna, medio socioeconómico, diagnóstico", tipo:"open",
         nota:"Sección ABIERTA: requiere mapas, cartas, listados de flora/fauna (NOM-059) y datos INEGI/CONAGUA. Guía ✎ conservada.", b:"abierta"},
       {id:"iaFloraFauna", l:"Flora y fauna (III.4.3) — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
-        nota:"Genera el diagnóstico biótico (vegetación + fauna + estatus NOM-059) con IA a partir de los datos del proyecto. Editable; se inserta en III.4.3 del documento."}
+        nota:"Genera el diagnóstico biótico (vegetación + fauna + estatus NOM-059) con IA a partir de los datos del proyecto. Editable; se inserta en III.4.3 del documento."},
+      {id:"tablaBiota", l:"Listados de flora y fauna (Tablas III.15–III.18) — llenar con IA", tipo:"tablaIA", b:"abierta",
+        nota:"Pega el listado de especies (o adjunta una imagen de la tabla/listado) y la IA llena las 4 tablas (flora, mamíferos, aves, anfibios/reptiles) SIN límite de filas. Se vuelcan al documento.",
+        tablas:[
+          {key:"tablaFlora",     titulo:"Flora",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaMamiferos", titulo:"Mamíferos",           columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaAvifauna",  titulo:"Avifauna",            columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaHerpeto",   titulo:"Anfibios y reptiles", columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
+        ]}
     ]},
 
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"La metodología (Leopold + Gómez-Orea + índices) y las escalas se incluyen automáticamente.", fields:[
@@ -256,8 +265,39 @@
     bindIA();
     bindChecklist();
     bindAnexos();
+    bindTablaIA();
     setupScrollSpy();
     updateProgress();
+  }
+
+  function findField(id){ for(const s of SECTIONS){ for(const f of (s.fields||[])){ if(f.id===id) return f; } } return null; }
+
+  // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
+  function bindTablaIA(){
+    document.querySelectorAll("input[type=file][data-timg]").forEach(inp=>{
+      inp.onchange=()=>{ const f=inp.files[0]; const lbl=document.querySelector('[data-tdimg-name="'+inp.dataset.timg+'"]'); if(lbl) lbl.textContent=f?("📷 "+f.name):""; };
+    });
+    document.querySelectorAll("[data-tbtn]").forEach(btn=>{
+      btn.onclick=async()=>{
+        const fid=btn.dataset.tbtn, field=findField(fid); if(!field) return;
+        const draw=document.querySelector('[data-tdraw="'+fid+'"]'); const datos_crudos=draw?draw.value.trim():"";
+        const imgInp=document.querySelector('[data-timg="'+fid+'"]'); const file=imgInp&&imgInp.files[0];
+        const status=document.querySelector('[data-tstatus="'+fid+'"]');
+        if(!datos_crudos && !file){ toast("Pega datos o adjunta una imagen primero"); return; }
+        let imagen=null;
+        if(file){ try{ const url=await fileToDataURL(file); const m=url.match(/^data:(.*?);base64,(.*)$/); if(m) imagen={media_type:m[1], data:m[2]}; }catch(e){} }
+        btn.disabled=true; const prev=btn.textContent; btn.textContent="Estructurando…"; if(status) status.textContent=" Procesando con IA…";
+        try{
+          const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"tabla", tablas:field.tablas, datos_crudos, imagen})});
+          const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+          if(!state.tablas) state.tablas={};
+          Object.keys(j.tablas||{}).forEach(k=>{ if(Array.isArray(j.tablas[k])) state.tablas[k]=j.tablas[k]; });
+          save(); renderForm();
+          toast("Tablas estructuradas ✓ — revisa el documento (III.4.3)");
+        }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error IA: "+e.message); }
+      };
+    });
   }
 
   // Referencias / Anexos: registro editable de documentos requeridos + enlaces.
@@ -440,6 +480,18 @@
       case "guia": return `<div class="guia-panel">${D.GUIA_HTML||""}</div>`;
       case "checklist": return renderChecklist();
       case "anexos": return renderAnexos();
+      case "tablaIA": {
+        const t=state.tablas||{};
+        const resumen=(f.tablas||[]).map(x=>`${x.titulo}: <b>${(t[x.key]||[]).length}</b> filas`).join(" · ");
+        return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
+          `<textarea data-tdraw="${f.id}" placeholder="Pega aquí el listado / los datos crudos (texto)…" style="min-height:90px"></textarea>`+
+          `<div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">`+
+            `<label class="imglink" style="cursor:pointer">📷 Adjuntar imagen<input type="file" accept="image/*" data-timg="${f.id}" hidden></label>`+
+            `<span data-tdimg-name="${f.id}" style="font-size:12.5px;color:var(--muted,#888)"></span>`+
+            `<button type="button" class="ia-btn" data-tbtn="${f.id}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Estructurar con IA</button>`+
+            `<span class="ia-status" data-tstatus="${f.id}" style="font-size:13px;color:var(--muted,#888)"></span></div>`+
+          `<div style="margin-top:6px;font-size:13px">${resumen}</div></div>`;
+      }
     }
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;

@@ -109,6 +109,60 @@ async function redactarSeccion(seccion, datos) {
   return { texto };
 }
 
+// ---- Modo "tabla": estructura datos pegados o una imagen en filas --------
+const SYSTEM_TABLA =
+  "Eres un asistente que estructura datos crudos (texto o imágenes de tablas/listados) " +
+  "en tablas para un Informe Preventivo (IP) ASEA. Devuelve ÚNICAMENTE JSON válido, sin " +
+  "texto adicional. No inventes datos: si un campo no aparece en la fuente, usa cadena vacía. " +
+  "No limites el número de filas: incluye TODAS las que encuentres.";
+
+async function estructurarTabla({ tablas, datos_crudos, imagen }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!Array.isArray(tablas) || !tablas.length) throw new Error("Faltan especificaciones de tabla.");
+
+  const spec = tablas.map((t) =>
+    `- "${t.key}" (${t.titulo || t.key}): columnas [${(t.columnas || []).join(", ")}]`).join("\n");
+  const forma = "{ " + tablas.map((t) =>
+    `"${t.key}": [ { ${(t.columnas || []).map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") + " }";
+
+  const instruccion =
+`Estructura la información proporcionada (texto y/o imagen) en las siguientes tablas.
+Devuelve ÚNICAMENTE un objeto JSON con esta forma exacta:
+${forma}
+
+Tablas a llenar:
+${spec}
+
+Reglas: una fila por registro; no inventes datos (campo vacío si no aparece en la fuente);
+incluye TODAS las filas encontradas, sin límite.${datos_crudos ? "\n\nDatos crudos:\n" + datos_crudos : ""}`;
+
+  const content = [];
+  if (imagen && imagen.data) {
+    content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
+  }
+  content.push({ type: "text", text: instruccion });
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: SYSTEM_TABLA, messages: [{ role: "user", content }] }),
+  });
+  if (!resp.ok) {
+    const d = await resp.text();
+    throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`);
+  }
+  const data = await resp.json();
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  let jsonStr = txt;
+  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); }
+  catch (e) { throw new Error("La IA no devolvió JSON válido para la tabla."); }
+  return { tablas: parsed };
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).json({ ok: false, error: "Usa POST." });
@@ -116,8 +170,12 @@ module.exports = async (req, res) => {
   }
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const { seccion, datos } = body;
-    const out = await redactarSeccion(seccion, datos);
+    if (body.accion === "tabla") {
+      const out = await estructurarTabla(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
+    const out = await redactarSeccion(body.seccion, body.datos);
     res.status(200).json({ ok: true, ...out });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
@@ -126,3 +184,4 @@ module.exports = async (req, res) => {
 
 // Exportado para pruebas locales con node.
 module.exports.redactarSeccion = redactarSeccion;
+module.exports.estructurarTabla = estructurarTabla;

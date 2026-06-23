@@ -28,6 +28,13 @@
         caption: (f.num!=null ? ("Figura "+f.num+". ") : "") + (f.titulo||"") }));
     };
     const SP  = ()     => B.push({ t:"sp" });
+    // Filas de tabla llenadas por IA (state.tablas[key]); sin límite de filas.
+    const tFilled = (key) => !!(state && state.tablas && Array.isArray(state.tablas[key]) && state.tablas[key].length);
+    const tRows = (key, head, fbN) => {
+      if (tFilled(key)) return state.tablas[key].map(r => head.map(c => (r && r[c] != null ? r[c] : "")));
+      return empty(fbN, head.length);
+    };
+    const tK = (key) => tFilled(key) ? "auto" : "scaffold";
     // Emite la redacción de IA (state[key]) como párrafos resaltados, si existe.
     const IAP = (key) => {
       const txt = state && state[key];
@@ -312,10 +319,11 @@
     }
     FIGAREA("f22");
     FIGAREA("f23");
-    TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(12,4) });
-    TBL({ title:"Tabla III.16. Listado de mamíferos potencialmente presentes en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(8,4) });
-    TBL({ title:"Tabla III.17. Listado de avifauna potencialmente presente en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(10,4) });
-    TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(8,4) });
+    var HBIO=["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"];
+    TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI", head:HBIO, k:tK("tablaFlora"), rows: tRows("tablaFlora",HBIO,12) });
+    TBL({ title:"Tabla III.16. Listado de mamíferos potencialmente presentes en el AI", head:HBIO, k:tK("tablaMamiferos"), rows: tRows("tablaMamiferos",HBIO,8) });
+    TBL({ title:"Tabla III.17. Listado de avifauna potencialmente presente en el AI", head:HBIO, k:tK("tablaAvifauna"), rows: tRows("tablaAvifauna",HBIO,10) });
+    TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI", head:HBIO, k:tK("tablaHerpeto"), rows: tRows("tablaHerpeto",HBIO,8) });
     FIGAREA("f24");
     H(4, "III.4.4 Medio socioeconómico y cultural");
     I("Densidad poblacional, pueblos originarios, desempleo, economía, vivienda, rezago social, zonas de atención prioritaria, valor cultural y patrimonio (INEGI Censo, INAH, CONABIO, CONANP).");
