@@ -135,4 +135,31 @@
       "Tablas con bordes, figuras/mapas numerados, ortografía, alineación justificada",
     ]},
   ];
+
+  // ---- Referencias / Anexos: documentos requeridos por el IP -----------
+  // link = enlace por defecto (editable por proyecto desde la app).
+  D.ANEXOS_DOCS = [
+    { id:"recopilacion", nombre:"RECOPILACIÓN DE DATOS (formulario preliminar)", tipo:"Excel/Sheet",
+      link:"https://drive.google.com/open?id=1PfFwTI09Vg41ktwA6kQ3nxoDQha7SXjK", usa:"Sección I, datos del proyecto" },
+    { id:"interseccion", nombre:"ANÁLISIS DE INTERSECCIÓN SIGEIA", tipo:"Excel/Sheet",
+      link:"https://drive.google.com/open?id=1TZ4kpOhnRp77woqCfZnLRXR3yDhpkH9Q2OKAbw6urgg", usa:"II.2 POEGT / UGA" },
+    { id:"flora_fauna", nombre:"BASE DE DATOS FLORA Y FAUNA", tipo:"Excel/Sheet",
+      link:"https://drive.google.com/open?id=1aXOp1LPtix-SwhPqSn90WC9xuvL7Jupsws3L3xpUI0E", usa:"III.4.3 bióticos (NOM-059)" },
+    { id:"matriz_leopold", nombre:"MATRIZ DE LEOPOLD", tipo:"Excel",
+      link:"https://drive.google.com/open?id=1bBK-ya4AshXr3NBJmfe-gfrpTxpVjs1w", usa:"III.5 identificación de impactos" },
+    { id:"matriz_impactos", nombre:"MATRIZ DE IMPACTOS GÓMEZ-OREA (ISIG)", tipo:"Excel",
+      link:"https://drive.google.com/open?id=1QfZMVaefxO7rLDGU1nbrElbOCFWjPAC1", usa:"III.5.6 cálculo de índices" },
+    { id:"cumplimiento", nombre:"CUMPLIMIENTO REGULATORIO DEL PROYECTO", tipo:"Excel",
+      link:"https://drive.google.com/open?id=1afzzWG2-idfNBdeFTbT2m_8LT5MDmSc5", usa:"II.1 fundamento jurídico" },
+    { id:"noms", nombre:"BASE DE DATOS NOMs 2025 (marco legislativo)", tipo:"Excel",
+      link:"https://drive.google.com/open?id=1SbkJ3gfeKovMwfs4J69QPpadeUZTaM8n", usa:"II.1.5 NOMs vigentes" },
+    { id:"hdsm_gasolina", nombre:"Hoja de Seguridad (HDSM) — Gasolinas", tipo:"PDF", link:"", usa:"III.2 sustancias peligrosas" },
+    { id:"hdsm_diesel", nombre:"Hoja de Seguridad (HDSM) — Diésel", tipo:"PDF", link:"", usa:"III.2 sustancias peligrosas" },
+    { id:"planos", nombre:"Planos técnicos / P&ID / arquitectónico", tipo:"PDF/DWG", link:"", usa:"III.1 descripción técnica" },
+    { id:"fotos", nombre:"Fotos georreferenciadas del predio (8+)", tipo:"Imágenes", link:"", usa:"III.4 / anexo fotográfico" },
+    { id:"mapas", nombre:"Mapas temáticos (clima, geología, edafología, hidrología, vegetación, UGA)", tipo:"Imágenes/PDF", link:"", usa:"III.4 diagnóstico" },
+    { id:"dictamen_srv", nombre:"Dictamen UV de eficiencia del SRV (≥95%)", tipo:"PDF", link:"", usa:"III.3.1 NOM-004-ASEA-2017" },
+    { id:"poder", nombre:"Poder notarial del representante legal", tipo:"PDF", link:"", usa:"I.2.2 acreditación legal" },
+    { id:"cedula", nombre:"Cédula profesional del responsable técnico (vigente)", tipo:"PDF", link:"", usa:"I.3 responsable del IP" },
+  ];
 })();

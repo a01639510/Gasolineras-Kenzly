@@ -72,6 +72,7 @@
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
     if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
     if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
+    if(!state.anexos || typeof state.anexos!=="object") state.anexos={};
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
@@ -207,6 +208,9 @@
     ]},
     { id:"checklist", grp:"📖 Sistema IP 2026", titulo:"✅ Checklist ASEA-00-041", desc:"Verifica cada sección antes de entregar a la ASEA. Se guarda automáticamente.", fields:[
       {id:"_checklist", tipo:"checklist"}
+    ]},
+    { id:"anexosref", grp:"📖 Sistema IP 2026", titulo:"📎 Referencias / Anexos", desc:"Documentos requeridos del IP y su enlace (editable por proyecto). Si cambias de documento, actualiza aquí el link.", fields:[
+      {id:"_anexos", tipo:"anexos"}
     ]}
   ];
 
@@ -251,8 +255,37 @@
     bindFiguras();
     bindIA();
     bindChecklist();
+    bindAnexos();
     setupScrollSpy();
     updateProgress();
+  }
+
+  // Referencias / Anexos: registro editable de documentos requeridos + enlaces.
+  function renderAnexos(){
+    const docs = D.ANEXOS_DOCS || [];
+    const ax = state.anexos || {};
+    let filas = docs.map(d=>{
+      const link = (ax[d.id]!==undefined ? ax[d.id] : d.link) || "";
+      const abrir = link ? `<a href="${esc(link)}" target="_blank" rel="noopener" class="ax-open">↗ abrir</a>` : `<span class="ax-no">sin enlace</span>`;
+      return `<tr>
+        <td><b>${esc(d.nombre)}</b><div class="ax-usa">Usa en: ${esc(d.usa||"")}</div></td>
+        <td class="ax-tipo">${esc(d.tipo||"")}</td>
+        <td><input class="ax-link" data-ax="${esc(d.id)}" value="${esc(link)}" placeholder="Pega aquí el enlace del documento (Drive, etc.)"></td>
+        <td>${abrir}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="anexos">
+      <table class="ax-table" style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left">Documento</th><th>Tipo</th><th style="text-align:left">Enlace (editable)</th><th></th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <p style="color:var(--muted,#888);font-size:12.5px;margin-top:8px">Los enlaces se guardan por proyecto en este equipo (localStorage) y se incluyen al Guardar/Cargar JSON. Edítalos si cambias de documento por proyecto.</p>
+    </div>`;
+  }
+  function bindAnexos(){
+    document.querySelectorAll("input.ax-link[data-ax]").forEach(inp=>{
+      inp.oninput=()=>{ if(!state.anexos) state.anexos={}; state.anexos[inp.dataset.ax]=inp.value; save(); };
+    });
   }
 
   // Checklist ASEA-00-041 (interactivo, persistente en localStorage).
@@ -406,6 +439,7 @@
         `<textarea data-f="${f.id}" placeholder="Aquí aparecerá el texto generado por IA (editable). Se inserta en el documento.">${esc(val)}</textarea></div>`;
       case "guia": return `<div class="guia-panel">${D.GUIA_HTML||""}</div>`;
       case "checklist": return renderChecklist();
+      case "anexos": return renderAnexos();
     }
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;
