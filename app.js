@@ -240,21 +240,35 @@
       {id:"incluirConclusion", l:"Incluir conclusión estándar", tipo:"check", b:"boiler", def:true}
     ]},
 
-    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:"Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.", fields:[] },
-
-    { id:"guia", grp:"📖 Sistema IP 2026", titulo:"📖 Guía de uso", desc:"Cómo funciona la automatización del IP y la redacción con IA.", fields:[
-      {id:"_guia", tipo:"guia"}
-    ]},
-    { id:"checklist", grp:"📖 Sistema IP 2026", titulo:"✅ Checklist ASEA-00-041", desc:"Verifica cada sección antes de entregar a la ASEA. Se guarda automáticamente.", fields:[
-      {id:"_checklist", tipo:"checklist"}
-    ]},
-    { id:"anexosref", grp:"📖 Sistema IP 2026", titulo:"📎 Referencias / Anexos", desc:"Documentos requeridos del IP y su enlace (editable por proyecto). Si cambias de documento, actualiza aquí el link.", fields:[
-      {id:"_anexos", tipo:"anexos"}
-    ]}
+    { id:”anexos”, grp:”VI. Anexos”, titulo:”VI. Planos y anexos”, desc:”Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.”, fields:[] }
   ];
 
   // Lista de campos cerrados/boiler que cuentan para el progreso
   const REQUERIDOS = ["proyecto","empresa","calle","colonia","municipio","estado","cp","superficie","inversion","empleosDir","rfcEmpresa","repLegal","claveCatastral","permisoCRE","regASEA","uab"];
+
+  // ============== SEMÁFORO DE SECCIÓN ==============
+  function seccionStatus(sec){
+    const FL={text:1,num:1,money:1,date:1,select:1,selectEstado:1};
+    let total=0, done=0;
+    (sec.fields||[]).forEach(f=>{
+      if(FL[f.tipo]){
+        total++;
+        const v=state[f.id]!=null?state[f.id]:(f.def!=null?f.def:"");
+        if(v!==""&&String(v).trim()!=="") done++;
+      } else if(f.tipo==="ia"){
+        total++;
+        if(state[f.id]&&String(state[f.id]).trim()) done++;
+      } else if(f.tipo==="tablaIA"){
+        (f.tablas||[]).forEach(t=>{
+          total++;
+          const r=state.tablas&&state.tablas[t.key];
+          if(Array.isArray(r)&&r.length) done++;
+        });
+      }
+    });
+    if(!total) return "neutral";
+    return done===total?"green":"yellow";
+  }
 
   // ============== RENDER DEL FORMULARIO ==============
   function badge(b){
@@ -282,7 +296,9 @@
     D.AREAS.forEach(a=>{ (areasBySec[a.sec]=areasBySec[a.sec]||[]).push(a); });
     SECTIONS.forEach(sec=>{
       if(sec.grp!==lastGrp){ tocHtml+=`<div class="grp">${esc(sec.grp)}</div>`; lastGrp=sec.grp; }
-      tocHtml+=`<a href="#sec-${sec.id}" data-sec="${sec.id}">${esc(sec.titulo)}</a>`;
+      const st=seccionStatus(sec);
+      const dot=st!=="neutral"?`<span class="toc-dot ${st}"></span>`:"";
+      tocHtml+=`<a href="#sec-${sec.id}" data-sec="${sec.id}">${dot}${esc(sec.titulo)}</a>`;
       formHtml+=`<section class="card" id="sec-${sec.id}"><h2>${esc(sec.titulo)}</h2>`;
       if(sec.desc) formHtml+=`<div class="desc">${esc(sec.desc)}</div>`;
       sec.fields.forEach(f=>{ formHtml+=renderField(f); });
@@ -664,9 +680,17 @@
   }
 
   function updateProgress(){
-    const done = REQUERIDOS.filter(id=>state[id]&&String(state[id]).trim()!=="").length;
-    const pct = Math.round(done/REQUERIDOS.length*100);
+    const FL={text:1,num:1,money:1,date:1,select:1,selectEstado:1};
+    let total=0, done=0;
+    SECTIONS.forEach(sec=>(sec.fields||[]).forEach(f=>{
+      if(!FL[f.tipo]) return;
+      total++;
+      const v=state[f.id]!=null?state[f.id]:(f.def!=null?f.def:"");
+      if(v!==""&&String(v).trim()!=="") done++;
+    }));
+    const pct=total?Math.round(done/total*100):0;
     const bar=$("#progBar"); if(bar) bar.style.width=pct+"%";
+    const txt=$("#progText"); if(txt) txt.textContent=`${done}/${total} campos completados`;
   }
 
   function setupScrollSpy(){
@@ -882,6 +906,27 @@
 
   function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
 
+  // ============== MODALES Y TOC DRAWER ==============
+  function openModal(id, populate){
+    const m=$(id); if(!m) return;
+    if(populate) populate();
+    m.classList.add("open");
+    document.body.style.overflow="hidden";
+  }
+  function closeModal(id){
+    const m=$(id); if(!m) return;
+    m.classList.remove("open");
+    document.body.style.overflow="";
+  }
+  function openToc(){
+    const t=$("#toc"),b=$("#tocBackdrop");
+    t&&t.classList.add("open"); b&&b.classList.add("open");
+  }
+  function closeToc(){
+    const t=$("#toc"),b=$("#tocBackdrop");
+    t&&t.classList.remove("open"); b&&b.classList.remove("open");
+  }
+
   // ============== INIT ==============
   function init(){
     normalize();
@@ -900,9 +945,33 @@
     bind("#btnCargar", ()=>$("#fileInput").click());
     const fi=$("#fileInput"); if(fi) fi.onchange=(e)=>{ if(e.target.files[0]) cargarJSON(e.target.files[0]); };
     document.querySelectorAll(".seg-btn").forEach(x=>x.onclick=()=>mostrarVista(x.dataset.modo));
+
+    // TOC drawer
+    bind("#btnToc", ()=>{ if($("#toc").classList.contains("open")) closeToc(); else openToc(); });
+    bind("#btnTocClose", closeToc);
+    const bdEl=$("#tocBackdrop"); if(bdEl) bdEl.onclick=closeToc;
+
+    // TOC links: scroll + close drawer
     document.querySelectorAll('nav.toc a').forEach(a=>a.addEventListener("click",e=>{
-      e.preventDefault(); const t=document.querySelector(a.getAttribute("href")); if(t) t.scrollIntoView({behavior:"smooth"});
+      e.preventDefault();
+      const t=document.querySelector(a.getAttribute("href")); if(t) t.scrollIntoView({behavior:"smooth"});
+      closeToc();
     }));
+
+    // Icon buttons → modales
+    bind("#btnGuia", ()=>openModal("#modalGuia", ()=>{
+      const b=$("#modalGuiaBody"); if(b) b.innerHTML=D.GUIA_HTML||"<p>Sin contenido.</p>";
+    }));
+    bind("#btnChecklist", ()=>openModal("#modalChecklist", ()=>{
+      const b=$("#modalChecklistBody"); if(b){ b.innerHTML=renderChecklist(); bindChecklist(); }
+    }));
+    bind("#btnAnexosRef", ()=>openModal("#modalAnexos", ()=>{
+      const b=$("#modalAnexosBody"); if(b){ b.innerHTML=renderAnexos(); bindAnexos(); }
+    }));
+
+    // Cerrar modales
+    document.querySelectorAll(".modal-close[data-close]").forEach(btn=>btn.onclick=()=>closeModal("#"+btn.dataset.close));
+    document.querySelectorAll(".modal-overlay").forEach(m=>m.onclick=(e)=>{ if(e.target===m) closeModal("#"+m.id); });
   }
   document.addEventListener("DOMContentLoaded", init);
 })();
