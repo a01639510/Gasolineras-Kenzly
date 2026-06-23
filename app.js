@@ -76,7 +76,9 @@
     if(!state.tablas || typeof state.tablas!=="object") state.tablas={};
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
-  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
+  let _liveT=null;
+  function programarLive(){ clearTimeout(_liveT); _liveT=setTimeout(()=>{ try{ renderLiveDoc(); }catch(e){} }, 280); }
+  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); programarLive(); }
   function g(id, def=""){ return state[id]!=null && state[id]!=="" ? state[id] : def; }
 
   // ---- Definición del cuestionario (secciones = capítulos del IP) ----
@@ -297,6 +299,7 @@
     bindImportar();
     setupScrollSpy();
     updateProgress();
+    programarLive();
   }
 
   // Campos del proyecto que la recopilación puede autollenar (derivados de SECTIONS).
@@ -786,23 +789,22 @@
   }
 
   // ============== VISTA PREVIA / EXPORTACIÓN ==============
-  function mostrarVista(modo){
-    if(modo) vistaModo = modo;
+  // Renderiza el documento en el panel derecho (vista en vivo). No oculta el editor.
+  function renderLiveDoc(){
+    const doc = $("#doc"); if(!doc) return;
     const blocks = buildBlocks();
-    $("#doc").innerHTML = renderBlocks(blocks, vistaModo);
-    $("#doc").className = "doc " + (vistaModo==="borrador" ? "modo-borrador" : "modo-final");
-    // actualizar toggles y contador
+    doc.innerHTML = renderBlocks(blocks, vistaModo);
+    doc.className = "doc " + (vistaModo==="borrador" ? "modo-borrador" : "modo-final");
     const np = contarPendientes(blocks), nn = contarNuevos(blocks);
     const info = $("#prevInfo");
     if(info) info.textContent = (vistaModo==="borrador"
-        ? `Borrador · ${nn} bloques nuevos resaltados · ${np} áreas pendientes`
-        : `Documento limpio · ${np} áreas pendientes resaltadas`);
+        ? `Borrador · ${nn} bloques nuevos · ${np} áreas pendientes`
+        : `Documento limpio · ${np} áreas pendientes`);
     document.querySelectorAll(".seg-btn").forEach(x=>x.classList.toggle("active", x.dataset.modo===vistaModo));
-    $("#formWrap").style.display="none";
-    $("#previewWrap").style.display="block";
-    window.scrollTo(0,0);
   }
-  function volver(){ $("#previewWrap").style.display="none"; $("#formWrap").style.display="grid"; }
+  function mostrarVista(modo){ if(modo) vistaModo = modo; renderLiveDoc(); }
+  function toggleFocus(){ document.body.classList.toggle("focus-doc"); }
+  function volver(){ document.body.classList.remove("focus-doc"); }
 
   function wordStyles(){
     return `<style>
@@ -884,23 +886,22 @@
   function init(){
     normalize();
     renderForm();
+    renderLiveDoc();
     // Carga el bucket de imágenes (async) y refresca cuando esté listo
-    idbAll().then(m=>{ imgCache=m; renderForm();
-      if($("#previewWrap") && $("#previewWrap").style.display==="block") mostrarVista();
-      updateProgress();
-    });
-    $("#btnVista").onclick=()=>mostrarVista("borrador");
-    $("#btnVista2").onclick=()=>mostrarVista("borrador");
-    $("#btnVolver").onclick=volver;
-    $("#btnWord").onclick=()=>exportWord("borrador");
-    $("#btnWordBorrador").onclick=()=>exportWord("borrador");
-    $("#btnWordLimpio").onclick=()=>exportWord("final");
-    $("#btnGuardar").onclick=guardarJSON;
-    $("#btnCargar").onclick=()=>$("#fileInput").click();
-    $("#fileInput").onchange=(e)=>{ if(e.target.files[0]) cargarJSON(e.target.files[0]); };
+    idbAll().then(m=>{ imgCache=m; renderForm(); renderLiveDoc(); updateProgress(); });
+    const bind=(id,fn)=>{ const el=$(id); if(el) el.onclick=fn; };
+    bind("#btnVista", toggleFocus);
+    bind("#btnVista2", toggleFocus);
+    bind("#btnVolver", volver);
+    bind("#btnWord", ()=>exportWord("borrador"));
+    bind("#btnWordBorrador", ()=>exportWord("borrador"));
+    bind("#btnWordLimpio", ()=>exportWord("final"));
+    bind("#btnGuardar", guardarJSON);
+    bind("#btnCargar", ()=>$("#fileInput").click());
+    const fi=$("#fileInput"); if(fi) fi.onchange=(e)=>{ if(e.target.files[0]) cargarJSON(e.target.files[0]); };
     document.querySelectorAll(".seg-btn").forEach(x=>x.onclick=()=>mostrarVista(x.dataset.modo));
     document.querySelectorAll('nav.toc a').forEach(a=>a.addEventListener("click",e=>{
-      e.preventDefault(); document.querySelector(a.getAttribute("href")).scrollIntoView({behavior:"smooth"});
+      e.preventDefault(); const t=document.querySelector(a.getAttribute("href")); if(t) t.scrollIntoView({behavior:"smooth"});
     }));
   }
   document.addEventListener("DOMContentLoaded", init);
