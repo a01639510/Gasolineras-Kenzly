@@ -28,6 +28,15 @@
         caption: (f.num!=null ? ("Figura "+f.num+". ") : "") + (f.titulo||"") }));
     };
     const SP  = ()     => B.push({ t:"sp" });
+    // Emite la redacción de IA (state[key]) como párrafos resaltados, si existe.
+    const IAP = (key) => {
+      const txt = state && state[key];
+      if (txt && String(txt).trim()) {
+        String(txt).trim().split(/\n{2,}/).forEach(par => { if (par.trim()) P(par.trim()); });
+        return true;
+      }
+      return false;
+    };
 
     const val = (id, ph) => { const x=g(id,""); return (x===""||x==null) ? ("["+(ph||"Especificar")+"]") : x; };
     const isAuto = (id) => { const x=g(id,""); return !(x===""||x==null); };
@@ -185,6 +194,7 @@
     // ========================================================================
     H(1, "III. Aspectos técnicos y ambientales");
     H(3, "III.1 Descripción general del proyecto o actividad proyectada");
+    IAP("iaDescTecnica");
     I("Basarse en la memoria técnica, plano del proyecto y proceso operativo.");
     TBL({ title:"Tabla III.1. Datos generales del proyecto", head:["Campo","Dato"],
           k: isAuto("claveCatastral")?"auto":"scaffold",
@@ -254,6 +264,7 @@
     I("Si se rebasa la “cantidad de reporte” → es obligatorio un Estudio de Riesgo como anexo (art. 18 REIA). Para ciertas actividades AHR podría requerirse MIA en lugar de IP; revisar viabilidad del IP antes de avanzar.");
 
     H(3, "III.3 Emisiones, descargas, residuos y medidas de control");
+    IAP("iaEmisiones");
     I("Describir procesos con diagrama de flujo; indicar entradas, rutas y balances; señalar sitios/etapas de generación de residuos líquidos, sólidos y ruido, con controles ambientales y evidencia analítica. Lógica N/A justificado cuando no aplique.");
     H(4, "III.3.1 Emisiones atmosféricas");
     I("Señalar sitios/etapas con emisiones al aire, con énfasis en emisiones fijas y mención (no obligatoria) de scope 3.");
@@ -332,6 +343,7 @@
     }
 
     H(3, "III.5 Identificación de impactos ambientales");
+    IAP("iaImpactos");
     I("Describir el método y técnicas (matriz de Leopold adaptada, cálculo de índices, matriz de resultados) para identificar, predecir y evaluar los impactos significativos. Usar como mínimo magnitud, duración, intensidad e importancia.");
     if (state.incluirMetodo !== false) {
       H(4, "III.5.1 Metodología de evaluación de impacto");
@@ -367,6 +379,7 @@
           head:["Medio","Σ ISIG (−)","Σ ISIG (+)","Balance neto","# Altos","# Medios"], k:"scaffold", rows: empty(4,6) });
 
     H(3, "III.6 Determinación de medidas para su prevención y mitigación");
+    IAP("iaMedidas");
     I("Identificar impactos principales por etapa y proponer medidas específicas, con programa de ejecución, responsable, NOM/marco legal aplicable y resultado esperado/impacto residual.");
     TBL({ title:"Tabla III.27. Relación de impactos y medidas (etapa de preparación y construcción)",
           head:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"],

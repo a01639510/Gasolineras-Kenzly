@@ -71,6 +71,7 @@
       state.instrumentos=D.INSTRUMENTOS.map(i=>({sel:i.sel}));
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
     if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
+    if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); }
@@ -151,7 +152,9 @@
       {id:"regASEA", l:"No. de Registro ASEA", tipo:"text", b:"cerrada"},
       {id:"usoSuelo", l:"Uso de suelo del sitio", tipo:"select", opts:["Urbano","Suburbano","Industrial","Agrícola","Erial"], b:"cerrada"},
       {id:"III1abierta", l:"III.1.2–III.1.7 Descripción técnica, dimensiones, programa de trabajo", tipo:"open",
-        nota:"Sección ABIERTA: requiere memoria técnica, planos, diagrama de Gantt y detalles de tanques/tuberías/maquinaria. Se conserva la guía ✎ del formato.", b:"abierta"}
+        nota:"Sección ABIERTA: requiere memoria técnica, planos, diagrama de Gantt y detalles de tanques/tuberías/maquinaria. Se conserva la guía ✎ del formato.", b:"abierta"},
+      {id:"iaDescTecnica", l:"Descripción técnica (III.1.2–7) — redacción con IA", tipo:"ia", seccion:"descripcion_tecnica", b:"abierta",
+        nota:"Genera la descripción técnica (actividades, dimensiones, programa, tanques/SRV) con IA. Editable; se inserta en III.1."}
     ]},
 
     { id:"III2", grp:"III. Aspectos técnicos", titulo:"III.2 Sustancias peligrosas", desc:"CRETIB y CAS pre-cargados. Sólo ajusta capacidad y proveedor.", fields:[
@@ -160,7 +163,9 @@
 
     { id:"III3", grp:"III. Aspectos técnicos", titulo:"III.3 Emisiones, descargas y residuos", desc:"", fields:[
       {id:"III3abierta", l:"Emisiones atmosféricas, descargas, residuos (RSU/RME/RP/RCD), ruido y diagrama de flujos", tipo:"open",
-        nota:"Sección ABIERTA: especificar por etapa (preparación, construcción, operación, abandono) con medidas de control. Guía ✎ conservada.", b:"abierta"}
+        nota:"Sección ABIERTA: especificar por etapa (preparación, construcción, operación, abandono) con medidas de control. Guía ✎ conservada.", b:"abierta"},
+      {id:"iaEmisiones", l:"Emisiones y residuos (III.3) — redacción con IA", tipo:"ia", seccion:"emisiones_residuos", b:"abierta",
+        nota:"Genera III.3 (VOC con/sin SRV, descargas, RSU/RME/RP/RCD, ruido) con IA. Editable; se inserta en III.3."}
     ]},
 
     { id:"III4", grp:"III. Aspectos técnicos", titulo:"III.4 Diagnóstico ambiental", desc:"El Modelo Ecológico Conceptual (MEC) se incluye automáticamente.", fields:[
@@ -174,12 +179,16 @@
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"La metodología (Leopold + Gómez-Orea + índices) y las escalas se incluyen automáticamente.", fields:[
       {id:"incluirMetodo", l:"Incluir metodología y tablas de criterios/escalas (boilerplate)", tipo:"check", b:"boiler", def:true},
       {id:"III5abierta", l:"Matriz de Leopold, evaluación de índices, descripción de impactos y balance", tipo:"open",
-        nota:"Sección ABIERTA: requiere construir la matriz de Leopold y la matriz de resultados con los cálculos del proyecto. Guía ✎ conservada.", b:"abierta"}
+        nota:"Sección ABIERTA: requiere construir la matriz de Leopold y la matriz de resultados con los cálculos del proyecto. Guía ✎ conservada.", b:"abierta"},
+      {id:"iaImpactos", l:"Identificación de impactos (III.5) — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
+        nota:"Genera III.5.7 (descripción de impactos altos/medios) y III.5.8 (balance) con IA, según la metodología Leopold/Gómez-Orea. Editable; se inserta en III.5."}
     ]},
 
     { id:"III6", grp:"III. Aspectos técnicos", titulo:"III.6 / III.7 Medidas y sustentabilidad", desc:"", fields:[
       {id:"III6abierta", l:"Medidas de prevención/mitigación por etapa y condiciones adicionales", tipo:"open",
-        nota:"Sección ABIERTA: tablas de medidas por etapa (preparación, operación, abandono) + Programa de Vigilancia Ambiental. Guía ✎ conservada.", b:"abierta"}
+        nota:"Sección ABIERTA: tablas de medidas por etapa (preparación, operación, abandono) + Programa de Vigilancia Ambiental. Guía ✎ conservada.", b:"abierta"},
+      {id:"iaMedidas", l:"Medidas de mitigación (III.6/III.7) — redacción con IA", tipo:"ia", seccion:"medidas", b:"abierta",
+        nota:"Genera las medidas por etapa (impacto, responsable, indicador, NOM) + Programa de Vigilancia con IA. Editable; se inserta en III.6."}
     ]},
 
     { id:"IV", grp:"IV. Abandono", titulo:"IV. Abandono del sitio", desc:"Párrafos plantilla con variables. Se redactan solos.", fields:[
@@ -191,7 +200,14 @@
       {id:"incluirConclusion", l:"Incluir conclusión estándar", tipo:"check", b:"boiler", def:true}
     ]},
 
-    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:"Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.", fields:[] }
+    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:"Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.", fields:[] },
+
+    { id:"guia", grp:"📖 Sistema IP 2026", titulo:"📖 Guía de uso", desc:"Cómo funciona la automatización del IP y la redacción con IA.", fields:[
+      {id:"_guia", tipo:"guia"}
+    ]},
+    { id:"checklist", grp:"📖 Sistema IP 2026", titulo:"✅ Checklist ASEA-00-041", desc:"Verifica cada sección antes de entregar a la ASEA. Se guarda automáticamente.", fields:[
+      {id:"_checklist", tipo:"checklist"}
+    ]}
   ];
 
   // Lista de campos cerrados/boiler que cuentan para el progreso
@@ -234,8 +250,47 @@
     bindInputs();
     bindFiguras();
     bindIA();
+    bindChecklist();
     setupScrollSpy();
     updateProgress();
+  }
+
+  // Checklist ASEA-00-041 (interactivo, persistente en localStorage).
+  function checklistId(gi, ii){ return "ck_"+gi+"_"+ii; }
+  function renderChecklist(){
+    const grupos = D.CHECKLIST_ASEA || [];
+    const cks = state.checklist || {};
+    let total=0, hechos=0, h="";
+    grupos.forEach((grp, gi)=>{
+      h+=`<div class="ck-grp"><h3 style="margin:14px 0 6px">${esc(grp.g)}</h3>`;
+      grp.items.forEach((it, ii)=>{
+        const obj = typeof it==="string" ? {t:it} : it;
+        const id = checklistId(gi, ii); const on = !!cks[id];
+        total++; if(on) hechos++;
+        h+=`<label class="ck-item" style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;${obj.sub?'margin-left:22px':''}">`+
+           `<input type="checkbox" data-ck="${id}" ${on?'checked':''} style="margin-top:3px">`+
+           `<span>${esc(obj.t)}</span></label>`;
+      });
+      h+=`</div>`;
+    });
+    const pct = total? Math.round(hechos*100/total) : 0;
+    return `<div class="checklist"><div class="ck-resumen" style="font-weight:600;margin-bottom:8px">Avance: ${hechos}/${total} (${pct}%)</div>${h}</div>`;
+  }
+  function bindChecklist(){
+    document.querySelectorAll("input[type=checkbox][data-ck]").forEach(cb=>{
+      cb.onchange=()=>{
+        if(!state.checklist) state.checklist={};
+        if(cb.checked) state.checklist[cb.dataset.ck]=true; else delete state.checklist[cb.dataset.ck];
+        save();
+        const cont = cb.closest(".checklist");
+        if(cont){ const res=cont.querySelector(".ck-resumen");
+          const all=cont.querySelectorAll("input[type=checkbox][data-ck]");
+          const done=cont.querySelectorAll("input[type=checkbox][data-ck]:checked");
+          const pct=all.length?Math.round(done.length*100/all.length):0;
+          if(res) res.textContent=`Avance: ${done.length}/${all.length} (${pct}%)`;
+        }
+      };
+    });
   }
 
   // Redacción IA de secciones abiertas (llama a /api/redactar — función serverless en Vercel).
@@ -348,7 +403,9 @@
       case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
         `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
         `<span class="ia-status" data-ia-status="${esc(f.id)}" style="margin-left:10px;color:var(--muted,#888);font-size:13px"></span></div>`+
-        `<textarea data-f="${f.id}" placeholder="Aquí aparecerá el texto generado por IA (editable). Se inserta en III.4.3 del documento.">${esc(val)}</textarea></div>`;
+        `<textarea data-f="${f.id}" placeholder="Aquí aparecerá el texto generado por IA (editable). Se inserta en el documento.">${esc(val)}</textarea></div>`;
+      case "guia": return `<div class="guia-panel">${D.GUIA_HTML||""}</div>`;
+      case "checklist": return renderChecklist();
     }
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;
