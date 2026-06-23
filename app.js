@@ -198,7 +198,15 @@
       {id:"III6abierta", l:"Medidas de prevención/mitigación por etapa y condiciones adicionales", tipo:"open",
         nota:"Sección ABIERTA: tablas de medidas por etapa (preparación, operación, abandono) + Programa de Vigilancia Ambiental. Guía ✎ conservada.", b:"abierta"},
       {id:"iaMedidas", l:"Medidas de mitigación (III.6/III.7) — redacción con IA", tipo:"ia", seccion:"medidas", b:"abierta",
-        nota:"Genera las medidas por etapa (impacto, responsable, indicador, NOM) + Programa de Vigilancia con IA. Editable; se inserta en III.6."}
+        nota:"Genera las medidas por etapa (impacto, responsable, indicador, NOM) + Programa de Vigilancia con IA. Editable; se inserta en III.6."},
+      {id:"tablaMedidas", l:"Tablas de medidas y vigilancia (III.27–III.30) — llenar con IA", tipo:"tablaIA", b:"abierta",
+        nota:"Pega los impactos/medidas (o adjunta una imagen) y la IA llena las tablas de medidas por etapa y el Programa de Vigilancia, SIN límite de filas. Se vuelcan al documento.",
+        tablas:[
+          {key:"tablaMedidasPrep", titulo:"Medidas — preparación/construcción", columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
+          {key:"tablaMedidasOper", titulo:"Medidas — operación",                columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
+          {key:"tablaMedidasAband",titulo:"Medidas — abandono",                 columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
+          {key:"tablaVigilancia",  titulo:"Programa de Vigilancia Ambiental",    columnas:["Etapa","Acción de vigilancia","Indicador verificable","Frecuencia","Responsable"]}
+        ]}
     ]},
 
     { id:"IV", grp:"IV. Abandono", titulo:"IV. Abandono del sitio", desc:"Párrafos plantilla con variables. Se redactan solos.", fields:[

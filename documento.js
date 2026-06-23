@@ -87,6 +87,12 @@
           head:["Punto de inflexión","X (Este)","Y (Norte)"],
           rows: pr.length?pr:[["1","",""],["2","",""],["3","",""],["4","",""]],
           k: pr.some(r=>r[1]||r[2]) ? "auto":"scaffold" });
+    var nPun = (state.puntos||[]).length || 4;
+    var rowsPun = Array.from({length:nPun}, (_,i)=>[String(i+1),"",""]);
+    TBL({ title:"Tabla I.1b. Coordenadas geográficas GMS (grados, minutos y segundos)",
+          head:["Punto de inflexión","Latitud Norte (G° M' S\")","Longitud Oeste (G° M' S\")"], k:"scaffold", rows: rowsPun.map(r=>r.slice()) });
+    TBL({ title:"Tabla I.1c. Coordenadas geográficas GD (grados decimales, Datum WGS 84)",
+          head:["Punto de inflexión","Latitud Norte (°)","Longitud Oeste (°)"], k:"scaffold", rows: rowsPun.map(r=>r.slice()) });
 
     H(3, "I.1.2 Superficie total del predio y del proyecto");
     P("Superficie ocupada por el proyecto (m²): " + val("superficie","Indicar"));
@@ -96,6 +102,9 @@
 
     H(3, "I.1.4 Número de empleos directos e indirectos generados");
     P("Empleos directos: " + val("empleosDir","Indicar número") + ". Empleos indirectos: " + val("empleosInd","Indicar número") + ".");
+    TBL({ title:"Tabla I.2b. Número de empleos por etapa del proyecto",
+          head:["Etapa","Empleos directos","Empleos indirectos"], k:"scaffold",
+          rows:[["Preparación del sitio y construcción","",""],["Operación y mantenimiento","",""],["Abandono del sitio","",""],["Total", val("empleosDir","—"), val("empleosInd","—")]] });
 
     H(3, "I.1.5 Duración del proyecto");
     I("Incluye todas las etapas o anualidades, o parcial (desglosada por etapas: preparación del sitio, construcción y operación).");
@@ -389,15 +398,18 @@
     H(3, "III.6 Determinación de medidas para su prevención y mitigación");
     IAP("iaMedidas");
     I("Identificar impactos principales por etapa y proponer medidas específicas, con programa de ejecución, responsable, NOM/marco legal aplicable y resultado esperado/impacto residual.");
+    var HMED=["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"];
     TBL({ title:"Tabla III.27. Relación de impactos y medidas (etapa de preparación y construcción)",
-          head:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"],
-          k:"scaffold", rows: empty(3,6) });
+          head:HMED, k:tK("tablaMedidasPrep"), rows: tRows("tablaMedidasPrep",HMED,3) });
     TBL({ title:"Tabla III.28. Relación de impactos y medidas (etapa de operación y mantenimiento)",
-          head:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"],
-          k:"scaffold", rows: empty(3,6) });
+          head:HMED, k:tK("tablaMedidasOper"), rows: tRows("tablaMedidasOper",HMED,3) });
     TBL({ title:"Tabla III.29. Relación de impactos y medidas (etapa de abandono)",
-          head:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"],
-          k:"scaffold", rows: empty(3,6) });
+          head:HMED, k:tK("tablaMedidasAband"), rows: tRows("tablaMedidasAband",HMED,3) });
+    H(4, "III.6.1 Programa de Vigilancia Ambiental");
+    IAP("iaVigilancia");
+    var HVIG=["Etapa","Acción de vigilancia","Indicador verificable","Frecuencia","Responsable"];
+    TBL({ title:"Tabla III.30. Programa de Vigilancia Ambiental",
+          head:HVIG, k:tK("tablaVigilancia"), rows: tRows("tablaVigilancia",HVIG,5) });
     I("Supervisión y seguimiento: procedimientos para supervisar el cumplimiento de las medidas y el Programa de Vigilancia Ambiental.");
 
     H(3, "III.7 Condiciones adicionales para la sustentabilidad");
