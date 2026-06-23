@@ -100,7 +100,7 @@
     });
   }
 
-  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); updateTocDots(); updateFieldFalta(); programarLive(); }
+  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); saveCurrentProject(); updateProgress(); updateTocDots(); updateFieldFalta(); programarLive(); }
   function g(id, def=""){ return state[id]!=null && state[id]!=="" ? state[id] : def; }
 
   // ---- Definición del cuestionario (secciones = capítulos del IP) ----
@@ -410,23 +410,26 @@
   function renderAnexos(){
     const docs = D.ANEXOS_DOCS || [];
     const ax = state.anexos || {};
-    let filas = docs.map(d=>{
-      const link = (ax[d.id]!==undefined ? ax[d.id] : d.link) || "";
-      const abrir = link ? `<a href="${esc(link)}" target="_blank" rel="noopener" class="ax-open">↗ abrir</a>` : `<span class="ax-no">sin enlace</span>`;
-      return `<tr>
-        <td><b>${esc(d.nombre)}</b><div class="ax-usa">Usa en: ${esc(d.usa||"")}</div></td>
-        <td class="ax-tipo">${esc(d.tipo||"")}</td>
-        <td><input class="ax-link" data-ax="${esc(d.id)}" value="${esc(link)}" placeholder="Pega aquí el enlace del documento (Drive, etc.)"></td>
-        <td>${abrir}</td>
-      </tr>`;
+    const driveIco=`<svg width="16" height="16" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>`;
+    const fileIco=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+    let items = docs.map(d=>{
+      const link=(ax[d.id]!==undefined?ax[d.id]:d.link)||"";
+      const abrirBtn=link?`<a href="${esc(link)}" target="_blank" rel="noopener" class="ax-open">${driveIco} Abrir</a>`:"";
+      return `<div class="ax-item">
+        <div class="ax-top">
+          <div class="ax-file-ico">${fileIco}</div>
+          <div class="ax-info">
+            <div class="ax-nombre">${esc(d.nombre)}</div>
+            <div class="ax-usa">Usa en: ${esc(d.usa||"—")}</div>
+          </div>
+        </div>
+        <div class="ax-link-row">
+          <input class="ax-link" data-ax="${esc(d.id)}" value="${esc(link)}" placeholder="Enlace de Drive…">
+          ${abrirBtn}
+        </div>
+      </div>`;
     }).join("");
-    return `<div class="anexos">
-      <table class="ax-table" style="width:100%;border-collapse:collapse">
-        <thead><tr><th style="text-align:left">Documento</th><th>Tipo</th><th style="text-align:left">Enlace (editable)</th><th></th></tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      <p style="color:var(--muted,#888);font-size:12.5px;margin-top:8px">Los enlaces se guardan por proyecto en este equipo (localStorage) y se incluyen al Guardar/Cargar JSON. Edítalos si cambias de documento por proyecto.</p>
-    </div>`;
+    return `<div class="ax-list">${items}<p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">Los enlaces se guardan por proyecto en este equipo. Se exportan con Guardar JSON.</p></div>`;
   }
   function bindAnexos(){
     document.querySelectorAll("input.ax-link[data-ax]").forEach(inp=>{
@@ -706,10 +709,9 @@
     const FL={text:1,num:1,money:1,date:1,select:1,selectEstado:1};
     let total=0, done=0;
     SECTIONS.forEach(sec=>(sec.fields||[]).forEach(f=>{
-      if(!FL[f.tipo]) return;
-      total++;
-      const v=state[f.id]!=null?state[f.id]:(f.def!=null?f.def:"");
-      if(v!==""&&String(v).trim()!=="") done++;
+      if(FL[f.tipo]){ total++; const v=state[f.id]!=null?state[f.id]:(f.def!=null?f.def:""); if(v!==""&&String(v).trim()!=="") done++; }
+      else if(f.tipo==="ia"){ total++; if(state[f.id]&&String(state[f.id]).trim()) done++; }
+      else if(f.tipo==="tablaIA"){ (f.tablas||[]).forEach(t=>{ total++; const r=state.tablas&&state.tablas[t.key]; if(Array.isArray(r)&&r.length) done++; }); }
     }));
     const pct=total?Math.round(done/total*100):0;
     const bar=$("#progBar"); if(bar) bar.style.width=pct+"%";
@@ -973,6 +975,81 @@
   }
 
   // ============== INIT ==============
+  // ===== GESTIÓN DE PROYECTOS (localStorage multi-proyecto) =====
+  const PROJECT_INDEX="vr_ip_idx";
+  let currentProjectId=null;
+  function pKey(id){ return "vr_ip_p_"+id; }
+  function loadIdx(){ try{ return JSON.parse(localStorage.getItem(PROJECT_INDEX))||[]; }catch(e){ return []; } }
+  function saveIdx(idx){ localStorage.setItem(PROJECT_INDEX,JSON.stringify(idx)); }
+  function fmtDate(){ return new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"}); }
+
+  function saveCurrentProject(){
+    if(!currentProjectId) return;
+    localStorage.setItem(pKey(currentProjectId),JSON.stringify(state));
+    const idx=loadIdx(), proj=idx.find(p=>p.id===currentProjectId);
+    if(proj){ proj.name=g("proyecto","Sin nombre")||"Sin nombre"; proj.municipio=g("municipio",""); proj.estado=g("estado",""); proj.mod=fmtDate(); saveIdx(idx); }
+  }
+
+  function openProject(id){
+    try{ const raw=localStorage.getItem(pKey(id)); state=raw?JSON.parse(raw):{}; }catch(e){ state={}; }
+    normalize(); currentProjectId=id; hideHome();
+    renderForm(); renderLiveDoc(); updateProgress();
+  }
+
+  function newProject(){
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+    const idx=loadIdx();
+    idx.unshift({id,name:"Nuevo IP",municipio:"",estado:"",mod:fmtDate()});
+    saveIdx(idx); state={}; normalize(); currentProjectId=id;
+    localStorage.setItem(pKey(id),JSON.stringify(state));
+    hideHome(); renderForm(); renderLiveDoc(); updateProgress();
+  }
+
+  function deleteProject(id){
+    if(!confirm("¿Eliminar este proyecto?\nEsta acción no se puede deshacer.")) return;
+    saveIdx(loadIdx().filter(p=>p.id!==id));
+    localStorage.removeItem(pKey(id));
+    renderHome();
+  }
+
+  function showHome(){ const hv=document.getElementById("homeView"); if(hv) hv.classList.add("visible"); renderHome(); }
+  function hideHome(){ const hv=document.getElementById("homeView"); if(hv) hv.classList.remove("visible"); }
+
+  function renderHome(){
+    const grid=document.getElementById("homeGrid"); if(!grid) return;
+    const idx=loadIdx();
+    const fileIco=`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+    let h=`<div class="ip-card new" id="btnNewProject">
+      <div class="new-plus"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      <div class="new-lbl">Nuevo Informe</div>
+    </div>`;
+    idx.forEach(p=>{
+      h+=`<div class="ip-card" data-pid="${esc(p.id)}">
+        <div class="ipc-ico">${fileIco}</div>
+        <div class="ipc-name">${esc(p.name||"Sin nombre")}</div>
+        <div class="ipc-meta">${esc([p.municipio,p.estado].filter(Boolean).join(", ")||"—")}</div>
+        <div class="ipc-date">Mod: ${esc(p.mod||"—")}</div>
+        <button class="ipc-del" data-del="${esc(p.id)}" title="Eliminar"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>`;
+    });
+    if(!idx.length) h+=`<div class="home-empty">Sin proyectos. Crea tu primer IP con el botón "+".</div>`;
+    grid.innerHTML=h;
+    const nb=document.getElementById("btnNewProject"); if(nb) nb.onclick=newProject;
+    grid.querySelectorAll(".ip-card[data-pid]").forEach(c=>c.onclick=(e)=>{ if(e.target.closest("[data-del]")) return; openProject(c.dataset.pid); });
+    grid.querySelectorAll("[data-del]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); deleteProject(b.dataset.del); });
+  }
+
+  function migrateOldData(){
+    if(loadIdx().length>0) return;
+    try{ const raw=localStorage.getItem(STORE); if(!raw) return;
+      const data=JSON.parse(raw);
+      const id="legacy_"+Date.now().toString(36);
+      saveIdx([{id,name:data.proyecto||"IP importado",municipio:data.municipio||"",estado:data.estado||"",mod:fmtDate()}]);
+      localStorage.setItem(pKey(id),raw);
+    }catch(e){}
+  }
+  // ===== FIN GESTIÓN DE PROYECTOS =====
+
   function init(){
     normalize();
     renderForm();
@@ -1001,12 +1078,12 @@
     bind("#btnDocToc", ()=>toggleDocToc());
     document.addEventListener("click", e=>{ if(!e.target.closest("#docTocPanel")&&!e.target.closest("#btnDocToc")) toggleDocToc(false); });
 
+    // Home button
+    bind("#btnHome", showHome);
+
     // Icon buttons → modales
     bind("#btnGuia", ()=>openModal("#modalGuia", ()=>{
       const b=$("#modalGuiaBody"); if(b) b.innerHTML=D.GUIA_HTML||"<p>Sin contenido.</p>";
-    }));
-    bind("#btnChecklist", ()=>openModal("#modalChecklist", ()=>{
-      const b=$("#modalChecklistBody"); if(b){ b.innerHTML=renderChecklist(); bindChecklist(); }
     }));
     bind("#btnAnexosRef", ()=>openModal("#modalAnexos", ()=>{
       const b=$("#modalAnexosBody"); if(b){ b.innerHTML=renderAnexos(); bindAnexos(); }
@@ -1015,6 +1092,10 @@
     // Cerrar modales
     document.querySelectorAll(".modal-close[data-close]").forEach(btn=>btn.onclick=()=>closeModal("#"+btn.dataset.close));
     document.querySelectorAll(".modal-overlay").forEach(m=>m.onclick=(e)=>{ if(e.target===m) closeModal("#"+m.id); });
+
+    // Proyectos: migrar datos previos y mostrar home
+    migrateOldData();
+    showHome();
   }
   document.addEventListener("DOMContentLoaded", init);
 })();
