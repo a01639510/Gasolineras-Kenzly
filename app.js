@@ -78,7 +78,29 @@
   }
   let _liveT=null;
   function programarLive(){ clearTimeout(_liveT); _liveT=setTimeout(()=>{ try{ renderLiveDoc(); }catch(e){} }, 280); }
-  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); programarLive(); }
+
+  // Actualiza semáforos del TOC sin re-renderizar el formulario
+  function updateTocDots(){
+    document.querySelectorAll("nav.toc a[data-sec]").forEach(a=>{
+      const sec=SECTIONS.find(s=>s.id===a.dataset.sec); if(!sec) return;
+      const st=seccionStatus(sec);
+      let dot=a.querySelector(".toc-dot");
+      if(st==="neutral"){ if(dot) dot.remove(); return; }
+      if(!dot){ dot=document.createElement("span"); dot.className="toc-dot"; a.prepend(dot); }
+      dot.className="toc-dot "+st;
+    });
+  }
+
+  // Actualiza el indicador de campo vacío sin re-renderizar el formulario
+  function updateFieldFalta(){
+    document.querySelectorAll(".field[data-fid]").forEach(div=>{
+      const f=findField(div.dataset.fid); if(!f||f.b!=="cerrada") return;
+      const empty=!(state[f.id]!=null&&String(state[f.id]).trim()!=="");
+      div.classList.toggle("falta",empty);
+    });
+  }
+
+  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); updateProgress(); updateTocDots(); updateFieldFalta(); programarLive(); }
   function g(id, def=""){ return state[id]!=null && state[id]!=="" ? state[id] : def; }
 
   // ---- Definición del cuestionario (secciones = capítulos del IP) ----
@@ -591,7 +613,7 @@
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;
     const isEmpty = f.b==="cerrada" && !(state[f.id]!=null && String(state[f.id]).trim()!=="");
-    return `<div class="field${isEmpty?" falta":""}"><label>${esc(f.l)} ${badge(f.b)}${f.hint?` <span class="hint">— ${esc(f.hint)}</span>`:''}</label>${inner}${prev}</div>`;
+    return `<div class="field${isEmpty?" falta":""}" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}${f.hint?` <span class="hint">— ${esc(f.hint)}</span>`:''}</label>${inner}${prev}</div>`;
   }
 
   function renderPuntos(f){
