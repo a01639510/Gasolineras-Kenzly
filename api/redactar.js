@@ -21,6 +21,9 @@ const SYSTEM = [
   "- Si un dato no está disponible, escribe: [Dato pendiente: descripción].",
   "- El texto debe poder insertarse directamente en el IP sin edición posterior.",
   "- No incluyas encabezados de sección ni numeración; sólo el cuerpo redactado.",
+  "- Respeta la longitud objetivo indicada para cada sección (ni más breve ni más extenso).",
+  "- Cita las normas con su clave y, cuando proceda, su fecha DOF (p. ej. NOM-005-ASEA-2016).",
+  "- Razona a partir de los datos proporcionados; no incluyas viñetas ni listas numeradas en la salida salvo que la sección lo pida: redacta en prosa de informe.",
 ].join("\n");
 
 // Encabezado común con los datos del proyecto.
@@ -31,6 +34,36 @@ Ubicación: ${ubic}.${d.superficie ? ` Superficie del predio: ${d.superficie}.` 
 Giro: estación de servicio (gasolinera, sector hidrocarburos), ${d.en_anp ? "DENTRO de ANP/RAMSAR" : "zona urbana consolidada, fuera de ANP/RAMSAR"}.`;
 }
 const extra = (d) => (d.notas ? `\nDatos adicionales del proyecto (úsalos, no inventes más):\n${d.notas}` : "");
+
+// Delimitación por sección: fuente de datos, longitud y formato esperados.
+const meta = (fuente, longitud, formato) =>
+  `\n\n— Fuente de datos: ${fuente}.\n— Longitud objetivo: ${longitud}.\n— Formato y razonamiento: ${formato}.`;
+const META = {
+  descripcion_tecnica: meta(
+    "RECOPILACIÓN_DATOS + planos/P&ID + memoria técnica del proyecto",
+    "4–6 párrafos (≈1–1.5 cuartillas)",
+    "prosa técnica continua; deriva las actividades del giro y describe el proceso de recepción→almacenamiento→despacho; identifica tanques y líneas con su clave"),
+  emisiones_residuos: meta(
+    "memoria técnica + HDSM + NOMs aplicables (NOM-004/052/001-ASEA, NOM-081)",
+    "1 párrafo por etapa (4 etapas) + medidas de control",
+    "prosa por etapa; cuantifica cuando haya dato, si no marca [Dato pendiente]; vincula cada residuo con su NOM"),
+  flora_fauna: meta(
+    "BASE_DATOS_FLORA_FAUNA (CONABIO/Enciclovida/SNIB/iNaturalist) + SIGEIA",
+    "3–4 párrafos",
+    "prosa; razona el grado de modificación del predio vs. la riqueza regional; separa lo del predio de lo del área de influencia"),
+  impactos: meta(
+    "MATRIZ_LEOPOLD + MATRIZ_IMPACTOS_GÓMEZ_OREA (ISIG) + secciones III.1–III.4",
+    "III.5.7: 4–8 párrafos (impactos altos/medios); III.5.8: 1–2 párrafos de balance",
+    "prosa; prioriza impactos por significancia (ISIG); para cada uno indica acción-factor y receptor; concluye viabilidad"),
+  medidas: meta(
+    "impactos significativos de III.5 + catálogo de NOMs aplicables",
+    "prosa por etapa (construcción, operación, abandono) + 1 párrafo de Programa de Vigilancia",
+    "cada medida vinculada a un impacto, con responsable e indicador y NOM; evita medidas genéricas"),
+  abandono: meta(
+    "datos técnicos del proyecto (tanques, volúmenes, vida útil) + procedimientos de seguridad",
+    "1–2 párrafos por apartado (IV.1–IV.8)",
+    "prosa técnica; procedimientos explícitos (desgasificación, LOTO, muestreo) y avisos administrativos con plazos"),
+};
 
 // Prompts maestros por sección (Sistema IP 2026 — compactados del catálogo VerdeRaíz).
 const PROMPTS = {
@@ -92,7 +125,7 @@ async function redactarSeccion(seccion, datos) {
       model: MODEL,
       max_tokens: 2048,
       system: SYSTEM,
-      messages: [{ role: "user", content: build(datos || {}) }],
+      messages: [{ role: "user", content: build(datos || {}) + (META[seccion] || "") }],
     }),
   });
 
