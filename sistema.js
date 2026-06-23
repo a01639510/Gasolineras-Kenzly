@@ -162,4 +162,25 @@
     { id:"poder", nombre:"Poder notarial del representante legal", tipo:"PDF", link:"", usa:"I.2.2 acreditación legal" },
     { id:"cedula", nombre:"Cédula profesional del responsable técnico (vigente)", tipo:"PDF", link:"", usa:"I.3 responsable del IP" },
   ];
+
+  // ---- II.1 Fundamento jurídico — prosa redactada (boilerplate sector HC) ----
+  D.JURIDICO = {
+    acuerdos:
+      "El proyecto se inscribe en el marco de los compromisos internacionales suscritos por México en materia ambiental. " +
+      "El Acuerdo de París orienta las políticas de mitigación de gases de efecto invernadero; el Protocolo de Montreal regula las sustancias agotadoras de la capa de ozono; el Convenio de Minamata atiende el manejo del mercurio; y los Convenios de Basilea, Estocolmo y Rotterdam rigen el movimiento y manejo ambientalmente racional de residuos y sustancias químicas peligrosas. " +
+      "Estos instrumentos no son de aplicación directa al particular, sino que se aterrizan en la legislación y en las Normas Oficiales Mexicanas exigibles que se citan en los apartados siguientes, conforme a las cuales el proyecto manejará sus residuos, emisiones y sustancias.",
+    constitucion:
+      "La Constitución Política de los Estados Unidos Mexicanos fundamenta la actuación ambiental del proyecto. El artículo 4º reconoce el derecho de toda persona a un medio ambiente sano y el deber del Estado de garantizarlo; el artículo 27 establece el dominio de la Nación sobre los hidrocarburos del subsuelo; los artículos 25 a 28 ordenan el desarrollo económico sustentable; el artículo 73 distribuye las facultades federales en materia de protección al ambiente; y el artículo 115 reconoce las competencias municipales en materia de uso de suelo y servicios. De este marco deriva el deber del promovente de prevenir y, en su caso, reparar los daños al ambiente.",
+    leyes:
+      "Resultan aplicables al proyecto, en materia ambiental: la Ley General del Equilibrio Ecológico y la Protección al Ambiente (LGEEPA), que establece la evaluación de impacto ambiental y la modalidad de Informe Preventivo (art. 31); la Ley General para la Prevención y Gestión Integral de los Residuos (LGPGIR); la Ley General de Cambio Climático (LGCC); la Ley de Aguas Nacionales (LAN); y la Ley de Infraestructura de la Calidad. " +
+      "En materia sectorial aplican la Ley del Sector Hidrocarburos —que regula el expendio al público de petrolíferos— y la Ley de la Agencia Nacional de Seguridad Industrial y de Protección al Medio Ambiente del Sector Hidrocarburos (Ley de la ASEA), que confiere a la Agencia la competencia para evaluar el presente instrumento. En materia de uso de suelo y ordenamiento territorial aplica la Ley General de Asentamientos Humanos, Ordenamiento Territorial y Desarrollo Urbano (LGAHOTDU) y sus correlativas estatales.",
+    reglamentos:
+      "Son aplicables el Reglamento de la LGEEPA en materia de Evaluación del Impacto Ambiental (REIA), que define el contenido y procedimiento del Informe Preventivo; el Reglamento de la LGEEPA en materia de Prevención y Control de la Contaminación de la Atmósfera; el Reglamento de la LGPGIR en materia de residuos peligrosos; el Reglamento de la Ley de Aguas Nacionales; y las Disposiciones Administrativas de Carácter General (DACG) emitidas por la ASEA aplicables al diseño, construcción, pre-arranque, operación, mantenimiento y cierre de las estaciones de servicio.",
+    noms:
+      "El proyecto observa las Normas Oficiales Mexicanas vigentes aplicables al sector: la NOM-005-ASEA-2016 (diseño, construcción, operación y mantenimiento de estaciones de servicio); la NOM-004-ASEA-2017 (sistemas de recuperación de vapores, eficiencia ≥95%); la NOM-001-ASEA-2019 (clasificación de residuos de manejo especial del sector); la NOM-052-SEMARNAT-2005 (características y manejo de residuos peligrosos, CRETIB); la NOM-081-SEMARNAT-1994 (límites de emisión de ruido de fuentes fijas); y la NOM-059-SEMARNAT-2010 (especies en riesgo), cuando por la ubicación resulte aplicable. En cada caso, el cumplimiento se acredita mediante dictámenes, pruebas de hermeticidad, manifiestos de residuos con gestor autorizado y los registros de operación y mantenimiento correspondientes.",
+    nmx:
+      "Como estándares de carácter voluntario —salvo que una NOM o una condicionante del permiso los haga obligatorios— resultan de referencia las normas mexicanas de la serie NMX-AA para métodos de muestreo y análisis ambiental, y la NMX-EC-17025-IMNC para la competencia de los laboratorios de prueba que, en su caso, realicen las mediciones ambientales del proyecto.",
+    otros:
+      "Adicionalmente aplican los ordenamientos estatales y municipales en materia ambiental, de uso de suelo y de protección civil, las normas técnicas complementarias, los lineamientos y guías emitidos por la ASEA, la SEMARNAT y la CONAGUA, así como las condicionantes derivadas de permisos, licencias y autorizaciones previas otorgadas al sitio (licencia de uso de suelo, permiso de la CRE/SENER y, en su caso, autorizaciones ambientales previas).",
+  };
 })();

@@ -139,20 +139,21 @@
     TBL({ title:"Tabla II.1. Instrumentos jurídicos aplicables al proyecto",
           head:["Instrumento (ley/NOM/regl./artículo)","Descripción (qué regula / alcance)","Vinculación con el proyecto"],
           k:"auto", rows: insSel.map(it=>[it.nombre, it.desc, it.vinc]) });
+    var J = D.JURIDICO || {};
     H(4, "II.1.1 Acuerdos Internacionales");
-    I("Tratados que aterricen obligaciones sobre emisiones, residuos peligrosos, sustancias, ozono, mercurio (Acuerdo de París, Montreal para SAO, Minamata para mercurio, Basilea/Estocolmo/Rotterdam para residuos químicos). Indicar cómo se aterriza en leyes/NOM mexicanas exigibles.");
+    if (J.acuerdos) P(J.acuerdos); else I("Tratados aplicables (Acuerdo de París, Montreal, Minamata, Basilea/Estocolmo/Rotterdam).");
     H(4, "II.1.2 Constitución de los Estados Unidos Mexicanos");
-    I("Artículos relevantes: 4º (medio ambiente sano), 25–28, 27 (subsuelo y recursos), 73 (facultades federales), 115 (competencias municipales). Fundamenta competencias y el deber de prevenir daños.");
+    if (J.constitucion) P(J.constitucion); else I("Artículos 4º, 25–28, 27, 73 y 115.");
     H(4, "II.1.3 Leyes");
-    I("Ambientales base (LGEEPA; LGPGIR; Ley General de Cambio Climático; Ley de Aguas Nacionales; Ley de Infraestructura de la Calidad). Sector (Ley del Sector de Hidrocarburos; Ley de la ASEA). Uso de suelo/OT (LGAHOTDU y correlativas estatales). Recursos y biodiversidad si aplica. Indicar permisos, estudios, avisos o reportes exigidos.");
+    if (J.leyes) P(J.leyes); else I("LGEEPA, LGPGIR, LGCC, LAN, Ley del Sector Hidrocarburos, Ley de la ASEA, LGAHOTDU.");
     H(4, "II.1.4 Reglamentos");
-    I("Reglamentos de la LGEEPA (EIA; Atmósfera; Residuos Peligrosos), Reglamento de la Ley de Aguas Nacionales y Disposiciones Administrativas de Carácter General (DACG) de ASEA aplicables al diseño, construcción, pre-arranque, operación, mantenimiento y cierre.");
+    if (J.reglamentos) P(J.reglamentos); else I("REIA, Reglamento de Atmósfera, Reglamento de RP, Reglamento de la LAN y DACG de ASEA.");
     H(4, "II.1.5 NOM");
-    I("Solo NOM vigentes que impongan valores límite, métodos, especificaciones o pruebas: riesgos y seguridad del sector hidrocarburos, descargas de aguas, residuos, emisiones a la atmósfera, suelos/remediación, ruido/vibraciones. En cada celda: clave completa + título breve y vinculación (obligación + evidencia + periodicidad + etapa). Verificar vigencia (fecha/versión).");
+    if (J.noms) P(J.noms); else I("NOM-005/004/001-ASEA, NOM-052/081/059-SEMARNAT vigentes.");
     H(4, "II.1.6 NMX");
-    I("Estándares voluntarios (salvo que una NOM o permiso los haga obligatorios): series NMX-AA para métodos ambientales; NMX-EC-17025 para laboratorios.");
+    if (J.nmx) P(J.nmx); else I("NMX-AA (métodos) y NMX-EC-17025 (laboratorios).");
     H(4, "II.1.7 Otros");
-    I("Leyes y reglamentos estatales/municipales, normas técnicas complementarias, lineamientos/guías de la autoridad (ASEA/SEMARNAT/CONAGUA) y condicionantes de permisos previos.");
+    if (J.otros) P(J.otros); else I("Ordenamientos estatales/municipales, DACG y condicionantes de permisos previos.");
 
     H(3, "II.2 Planes de desarrollo urbano y de ordenamiento ecológico");
     H(4, "II.2.1 Programa de Ordenamiento Ecológico General del Territorio (POEGT)");
