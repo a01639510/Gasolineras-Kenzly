@@ -696,10 +696,17 @@
 
   function setupScrollSpy(){
     const links=[...document.querySelectorAll("nav.toc a")];
+    const mainEl=document.querySelector("main");
+    const ps=document.getElementById("progSection");
     const obs=new IntersectionObserver(es=>{
-      es.forEach(e=>{ if(e.isIntersecting){ const id=e.target.id.replace("sec-","");
-        links.forEach(l=>l.classList.toggle("active", l.dataset.sec===id)); } });
-    },{rootMargin:"-40% 0px -55% 0px"});
+      es.forEach(e=>{ if(e.isIntersecting){
+        const id=e.target.id.replace("sec-","");
+        links.forEach(l=>l.classList.toggle("active", l.dataset.sec===id));
+        if(ps){ const lk=links.find(l=>l.dataset.sec===id);
+          const txt=lk?lk.textContent.trim().replace(/^\S+\s*/,"").slice(0,36):"";
+          ps.textContent=txt; ps.classList.toggle("visible",!!txt); }
+      } });
+    },{root:mainEl, rootMargin:"-8% 0px -78% 0px"});
     document.querySelectorAll("section.card").forEach(s=>obs.observe(s));
   }
 
