@@ -590,7 +590,8 @@
     }
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;
-    return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}${f.hint?` <span class="hint">— ${esc(f.hint)}</span>`:''}</label>${inner}${prev}</div>`;
+    const isEmpty = f.b==="cerrada" && !(state[f.id]!=null && String(state[f.id]).trim()!=="");
+    return `<div class="field${isEmpty?" falta":""}"><label>${esc(f.l)} ${badge(f.b)}${f.hint?` <span class="hint">— ${esc(f.hint)}</span>`:''}</label>${inner}${prev}</div>`;
   }
 
   function renderPuntos(f){
@@ -906,7 +907,7 @@
 
   function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
 
-  // ============== MODALES Y TOC DRAWER ==============
+  // ============== MODALES ==============
   function openModal(id, populate){
     const m=$(id); if(!m) return;
     if(populate) populate();
@@ -918,13 +919,28 @@
     m.classList.remove("open");
     document.body.style.overflow="";
   }
-  function openToc(){
-    const t=$("#toc"),b=$("#tocBackdrop");
-    t&&t.classList.add("open"); b&&b.classList.add("open");
+
+  // ============== ÍNDICE DEL DOCUMENTO (panel derecho) ==============
+  function renderDocToc(){
+    const panel=$("#docTocPanel"); if(!panel) return;
+    const doc=$("#doc"); if(!doc){ panel.innerHTML=""; return; }
+    const nodes=[...doc.querySelectorAll("h2,h3")];
+    if(!nodes.length){ panel.innerHTML='<div style="padding:10px 16px;font-size:12px;color:#888">Sin secciones aún</div>'; return; }
+    let h='<div class="dtoc-hdr">Índice del documento</div>';
+    nodes.forEach((n,i)=>{
+      const l3=n.tagName==="H3";
+      h+=`<a class="${l3?"l3":""}" data-di="${i}">${esc(n.textContent.trim().slice(0,58))}</a>`;
+    });
+    panel.innerHTML=h;
+    panel.querySelectorAll("a[data-di]").forEach((a,i)=>{
+      a.onclick=()=>{ nodes[i].scrollIntoView({behavior:"smooth",block:"start"}); toggleDocToc(false); };
+    });
   }
-  function closeToc(){
-    const t=$("#toc"),b=$("#tocBackdrop");
-    t&&t.classList.remove("open"); b&&b.classList.remove("open");
+  function toggleDocToc(force){
+    const p=$("#docTocPanel"); if(!p) return;
+    const open=typeof force==="boolean"?force:!p.classList.contains("open");
+    p.classList.toggle("open",open);
+    if(open) renderDocToc();
   }
 
   // ============== INIT ==============
@@ -946,17 +962,15 @@
     const fi=$("#fileInput"); if(fi) fi.onchange=(e)=>{ if(e.target.files[0]) cargarJSON(e.target.files[0]); };
     document.querySelectorAll(".seg-btn").forEach(x=>x.onclick=()=>mostrarVista(x.dataset.modo));
 
-    // TOC drawer
-    bind("#btnToc", ()=>{ if($("#toc").classList.contains("open")) closeToc(); else openToc(); });
-    bind("#btnTocClose", closeToc);
-    const bdEl=$("#tocBackdrop"); if(bdEl) bdEl.onclick=closeToc;
-
-    // TOC links: scroll + close drawer
+    // TOC sidebar links
     document.querySelectorAll('nav.toc a').forEach(a=>a.addEventListener("click",e=>{
       e.preventDefault();
       const t=document.querySelector(a.getAttribute("href")); if(t) t.scrollIntoView({behavior:"smooth"});
-      closeToc();
     }));
+
+    // Índice del documento
+    bind("#btnDocToc", ()=>toggleDocToc());
+    document.addEventListener("click", e=>{ if(!e.target.closest("#docTocPanel")&&!e.target.closest("#btnDocToc")) toggleDocToc(false); });
 
     // Icon buttons → modales
     bind("#btnGuia", ()=>openModal("#modalGuia", ()=>{
