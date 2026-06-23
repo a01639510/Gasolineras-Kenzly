@@ -82,6 +82,9 @@
   // ---- Definición del cuestionario (secciones = capítulos del IP) ----
   // tipos: text, num, money, date, select, textarea, open(boiler/abierta info)
   const SECTIONS = [
+    { id:"importar", grp:"Inicio", titulo:"⬆ Importar RECOPILACIÓN (autollenado)", desc:"Fuente primaria de datos: el formulario de recopilación que ya capturó el ingeniero. Autollena los campos del proyecto; tú sólo verificas.", fields:[
+      {id:"_importar", tipo:"importar"}
+    ]},
     { id:"portada", grp:"Inicio", titulo:"Portada y datos base", desc:"Se propagan a todo el documento (portada, encabezados, Introducción, II, III.5.1, Conclusión).", fields:[
       {id:"proyecto", l:"Nombre del proyecto", tipo:"text", b:"cerrada", hint:"Tal como aparecerá en el IP"},
       {id:"empresa", l:"Nombre de empresa / razón social (promovente)", tipo:"text", b:"cerrada"},
@@ -274,8 +277,45 @@
     bindChecklist();
     bindAnexos();
     bindTablaIA();
+    bindImportar();
     setupScrollSpy();
     updateProgress();
+  }
+
+  // Campos del proyecto que la recopilación puede autollenar (derivados de SECTIONS).
+  function camposImportables(){
+    const tipos={text:1,num:1,money:1,date:1,select:1,selectEstado:1};
+    const out=[];
+    SECTIONS.forEach(s=>(s.fields||[]).forEach(f=>{
+      if(tipos[f.tipo]){ const c={id:f.id,label:f.l||f.id}; if(f.opts) c.opts=f.opts; if(f.tipo==="selectEstado"&&D.LISTA_ESTADOS) c.opts=D.LISTA_ESTADOS; out.push(c); }
+    }));
+    return out;
+  }
+
+  // Autollenado desde la RECOPILACIÓN (fuente primaria) vía IA. El ingeniero verifica.
+  function bindImportar(){
+    const img=document.querySelector("input[type=file][data-imp-img]");
+    if(img) img.onchange=()=>{ const f=img.files[0]; const l=document.querySelector("[data-imp-imgname]"); if(l) l.textContent=f?("📷 "+f.name):""; };
+    const btn=document.querySelector("[data-imp-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const txt=(document.querySelector("[data-imp-txt]")||{}).value||"";
+      const url=(document.querySelector("[data-imp-url]")||{}).value||"";
+      const file=img&&img.files[0];
+      const status=document.querySelector("[data-imp-status]");
+      if(!txt.trim() && !url.trim() && !file){ toast("Pega el contenido, un enlace o adjunta una imagen"); return; }
+      let imagen=null;
+      if(file){ try{ const u=await fileToDataURL(file); const m=u.match(/^data:(.*?);base64,(.*)$/); if(m) imagen={media_type:m[1],data:m[2]}; }catch(e){} }
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Extrayendo…"; if(status) status.textContent=" Leyendo la recopilación con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"perfil", campos:camposImportables(), datos_crudos:txt.trim(), sheet_url:url.trim(), imagen})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const c=j.campos||{}; let n=0;
+        Object.keys(c).forEach(k=>{ const v=c[k]; if(v!==undefined && v!==null && String(v).trim()!==""){ state[k]=v; n++; } });
+        save(); renderForm();
+        toast(n?("✓ "+n+" campos autollenados — verifícalos"):"No se encontraron campos en la recopilación");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al importar: "+e.message); }
+    };
   }
 
   function findField(id){ for(const s of SECTIONS){ for(const f of (s.fields||[])){ if(f.id===id) return f; } } return null; }
@@ -488,6 +528,17 @@
       case "guia": return `<div class="guia-panel">${D.GUIA_HTML||""}</div>`;
       case "checklist": return renderChecklist();
       case "anexos": return renderAnexos();
+      case "importar": {
+        const link = (state.anexos && state.anexos.recopilacion) || "";
+        return `<div class="field"><div class="open-note">Pega el contenido del formulario de recopilación, adjunta una imagen/captura, o pega un enlace de Google Sheets. La IA extrae los datos y rellena los campos del proyecto. <b>Revisa siempre lo autollenado.</b></div>`+
+          `<input class="ax-link" data-imp-url value="${esc(link)}" placeholder="Enlace de Google Sheets de la recopilación (opcional)">`+
+          `<textarea data-imp-txt placeholder="O pega aquí el contenido de la recopilación (texto)…" style="min-height:90px;margin-top:6px"></textarea>`+
+          `<div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">`+
+            `<label class="imglink" style="cursor:pointer">📷 Adjuntar imagen<input type="file" accept="image/*" data-imp-img hidden></label>`+
+            `<span data-imp-imgname style="font-size:12.5px;color:var(--muted,#888)"></span>`+
+            `<button type="button" class="ia-btn" data-imp-btn style="background:#0e3b29;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">⬆ Autollenar datos del proyecto</button>`+
+            `<span class="ia-status" data-imp-status style="font-size:13px;color:var(--muted,#888)"></span></div></div>`;
+      }
       case "tablaIA": {
         const t=state.tablas||{};
         const resumen=(f.tablas||[]).map(x=>`${x.titulo}: <b>${(t[x.key]||[]).length}</b> filas`).join(" · ");

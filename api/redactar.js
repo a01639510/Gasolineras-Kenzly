@@ -23,8 +23,21 @@ const SYSTEM = [
   "- No incluyas encabezados de sección ni numeración; sólo el cuerpo redactado.",
   "- Respeta la longitud objetivo indicada para cada sección (ni más breve ni más extenso).",
   "- Cita las normas con su clave y, cuando proceda, su fecha DOF (p. ej. NOM-005-ASEA-2016).",
-  "- Razona a partir de los datos proporcionados; no incluyas viñetas ni listas numeradas en la salida salvo que la sección lo pida: redacta en prosa de informe.",
+  "- PROHIBIDO Markdown: NO uses #, ##, *, **, _, __, viñetas ni listas con guiones.",
+  "- Entrega TEXTO PLANO en prosa de informe; separa los párrafos con una línea en blanco.",
 ].join("\n");
+
+// Elimina cualquier resto de Markdown que el modelo pudiera devolver.
+function limpiarMarkdown(t) {
+  if (!t) return t;
+  return String(t)
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")     // encabezados ##
+    .replace(/\*\*/g, "").replace(/__/g, "") // negritas
+    .replace(/^\s*[*\-•]\s+/gm, "")          // viñetas
+    .replace(/\*/g, "")                       // asteriscos sueltos (cursivas)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 // Encabezado común con los datos del proyecto.
 function ctx(d) {
@@ -139,7 +152,59 @@ async function redactarSeccion(seccion, datos) {
     .map((b) => b.text)
     .join("")
     .trim();
-  return { texto };
+  return { texto: limpiarMarkdown(texto) };
+}
+
+// ---- Modo "perfil": extrae los datos del proyecto desde la RECOPILACIÓN ----
+const SYSTEM_PERFIL =
+  "Eres un asistente que extrae datos de proyecto desde un formulario de RECOPILACIÓN DE DATOS " +
+  "(texto o imagen) para llenar un Informe Preventivo. Devuelve ÚNICAMENTE JSON. No inventes: " +
+  "si un campo no aparece, omítelo. Para campos con lista de opciones, elige la más cercana.";
+
+function fetchSheetCSV(url) {
+  const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (!m) return Promise.resolve("");
+  return fetch(`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`)
+    .then((r) => (r.ok ? r.text() : "")).catch(() => "");
+}
+
+async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!Array.isArray(campos) || !campos.length) throw new Error("Faltan los campos a extraer.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) { const csv = await fetchSheetCSV(sheet_url); if (csv) fuente += "\n\n" + csv; }
+
+  const lista = campos.map((c) =>
+    `- ${c.id}: ${c.label}${c.opts && c.opts.length ? ` (opciones: ${c.opts.join(" | ")})` : ""}`).join("\n");
+  const instruccion =
+`Extrae del formulario de recopilación los siguientes campos y devuelve ÚNICAMENTE:
+{ "campos": { "id_campo": "valor", ... } }
+Omite los campos que no encuentres. No inventes datos.
+
+Campos a extraer:
+${lista}
+
+Formulario de recopilación:
+${fuente || "(ver imagen adjunta)"}`;
+
+  const content = [];
+  if (imagen && imagen.data) content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
+  content.push({ type: "text", text: instruccion });
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: SYSTEM_PERFIL, messages: [{ role: "user", content }] }),
+  });
+  if (!resp.ok) { const d = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`); }
+  const data = await resp.json();
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  let jsonStr = txt; const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  let parsed; try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el perfil."); }
+  return { campos: parsed.campos || parsed };
 }
 
 // ---- Modo "tabla": estructura datos pegados o una imagen en filas --------
@@ -208,6 +273,11 @@ module.exports = async (req, res) => {
       res.status(200).json({ ok: true, ...out });
       return;
     }
+    if (body.accion === "perfil") {
+      const out = await extraerPerfil(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
     const out = await redactarSeccion(body.seccion, body.datos);
     res.status(200).json({ ok: true, ...out });
   } catch (err) {
@@ -218,3 +288,5 @@ module.exports = async (req, res) => {
 // Exportado para pruebas locales con node.
 module.exports.redactarSeccion = redactarSeccion;
 module.exports.estructurarTabla = estructurarTabla;
+module.exports.extraerPerfil = extraerPerfil;
+module.exports.limpiarMarkdown = limpiarMarkdown;
