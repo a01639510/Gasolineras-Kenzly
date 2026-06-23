@@ -141,13 +141,22 @@
       {id:"ordRegional", l:"Ordenamiento Regional número", tipo:"text", b:"cerrada"},
       {id:"regionEco", l:"Región Ecológica número", tipo:"text", b:"cerrada"},
       {id:"regionEcoNombre", l:"Nombre de la Región Ecológica", tipo:"text", b:"cerrada"},
-      {id:"estrategias", l:"Vinculación con las 44 estrategias del POEGT", tipo:"estrategias", b:"boiler"}
+      {id:"estrategias", l:"Vinculación con las 44 estrategias del POEGT", tipo:"estrategias", b:"boiler"},
+      {id:"tablaUab", l:"Tabla II.3 — Políticas y usos de la UAB (llenar con IA)", tipo:"tablaIA", b:"abierta",
+        nota:"Pega los datos de la UAB del POEGT (rectores, coadyuvantes, asociados, política ambiental, área de atención prioritaria, estrategias sectoriales) o adjunta una imagen; la IA llena la Tabla II.3.",
+        tablas:[{key:"tablaUabPoliticas", titulo:"Políticas y usos de la UAB (conceptos: Rectores de desarrollo, Coadyuvantes del desarrollo, Asociados del desarrollo, Otros sectores de interés, Política Ambiental, Clave del Área de Atención Prioritaria, Nombre del Área de Atención Prioritaria, Estrategias sectoriales)", columnas:["Concepto","Valor"]}]}
     ]},
 
     { id:"II3", grp:"II. Fundamento jurídico", titulo:"II.2.4 / II.3 Plan municipal y parque industrial", desc:"", fields:[
       {id:"ugaEstatal", l:"Clave UGA estatal", tipo:"text", b:"cerrada"},
       {id:"municipioPlan", l:"Municipio del Plan Municipal", tipo:"text", b:"cerrada", hint:"si difiere"},
-      {id:"parqueInd", l:"¿El proyecto está en un parque industrial evaluado por la Secretaría?", tipo:"select", opts:["No (predio independiente)","Sí"], b:"boiler"}
+      {id:"parqueInd", l:"¿El proyecto está en un parque industrial evaluado por la Secretaría?", tipo:"select", opts:["No (predio independiente)","Sí"], b:"boiler"},
+      {id:"tablaMunicipal", l:"Tablas II.7 y II.8 — Plan municipal y POEL (llenar con IA)", tipo:"tablaIA", b:"abierta",
+        nota:"Pega los criterios del Plan Municipal de Desarrollo y del POEL del municipio (o adjunta una imagen); la IA llena las Tablas II.7 y II.8, sin límite de filas.",
+        tablas:[
+          {key:"tablaPlanMunicipal", titulo:"Vinculación con criterios del Plan Municipal", columnas:["Criterio","Descripción","Relación directa con el proyecto"]},
+          {key:"tablaPOEL", titulo:"POEL — UGA del municipio", columnas:["Clave UGA","Nombre UGA","Política territorial","Uso predominante","Uso condicionado","Uso incompatible"]}
+        ]}
     ]},
 
     { id:"III1", grp:"III. Aspectos técnicos", titulo:"III.1 Datos generales del proyecto", desc:"Datos administrativos cerrados.", fields:[

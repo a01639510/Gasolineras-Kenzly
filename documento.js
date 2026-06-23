@@ -161,11 +161,13 @@
     FIGAREA("f03");
     TBL({ title:"Tabla II.2. Unidad Ambiental Biofísica (UAB) de interés por ubicación del proyecto",
           head:["Proyecto","UAB"], k: isAuto("uab")?"auto":"scaffold", rows:[[g("proyecto","[Proyecto]"), val("uab")]] });
+    var HUAB=["Concepto","Valor"];
     TBL({ title:"Tabla II.3. Políticas, usos y estrategias de regulación ecológica aplicables a la UAB",
-          head:["Concepto","Valor"], k:"scaffold",
-          rows:[["Rectores de desarrollo",""],["Coadyuvantes del desarrollo",""],["Asociados del desarrollo",""],
-                ["Otros sectores de interés",""],["Política Ambiental",""],["Clave del Área de Atención Prioritaria",""],
-                ["Nombre del Área de Atención Prioritaria",""],["Estrategias sectoriales",""]] });
+          head:HUAB, k:tK("tablaUabPoliticas"),
+          rows: tFilled("tablaUabPoliticas") ? tRows("tablaUabPoliticas",HUAB,8) :
+            [["Rectores de desarrollo",""],["Coadyuvantes del desarrollo",""],["Asociados del desarrollo",""],
+             ["Otros sectores de interés",""],["Política Ambiental",""],["Clave del Área de Atención Prioritaria",""],
+             ["Nombre del Área de Atención Prioritaria",""],["Estrategias sectoriales",""]] });
     TBL({ title:"Tabla II.4. Vinculación del proyecto con las estrategias del POEGT",
           head:["Estrategia","Disposición","Cumplimiento de estrategia"], k:"auto",
           rows: D.ESTRATEGIAS_POEGT.map((e,i)=>{ const st=state.estrategias[i]||{d:e.d}; return [ e.n+". "+e.t, st.d, e.txt ]; }) });
@@ -191,16 +193,18 @@
     }
 
     H(4, "II.2.4 Plan Municipal de Desarrollo");
+    var HPM=["Criterio","Descripción","Relación directa con el proyecto"];
     TBL({ title:"Tabla II.7. Vinculación con los criterios del Plan Municipal de " + g("municipio","______"),
-          head:["Criterio","Descripción","Relación directa con el proyecto"], k:"scaffold",
-          rows:[["Ordenamiento territorial y uso de suelo","",""],["Movilidad y seguridad vial","",""],
-                ["Agua potable, alcantarillado y saneamiento","",""],["Calidad ambiental (aire, suelo, residuos)","",""],
-                ["Gestión de riesgos y resiliencia","",""]] });
+          head:HPM, k:tK("tablaPlanMunicipal"),
+          rows: tFilled("tablaPlanMunicipal") ? tRows("tablaPlanMunicipal",HPM,5) :
+            [["Ordenamiento territorial y uso de suelo","",""],["Movilidad y seguridad vial","",""],
+             ["Agua potable, alcantarillado y saneamiento","",""],["Calidad ambiental (aire, suelo, residuos)","",""],
+             ["Gestión de riesgos y resiliencia","",""]] });
     I("Vincular con el Programa de Ordenamiento Ecológico Local (POEL) del municipio: clave UGA, política ambiental, uso de suelo predominante, condicionado e incompatible.");
     FIGAREA("f05");
+    var HPOEL=["Clave UGA","Nombre UGA","Política territorial","Uso predominante","Uso condicionado","Uso incompatible"];
     TBL({ title:"Tabla II.8. POEL — Unidad de Gestión Ambiental del municipio",
-          head:["Clave UGA","Nombre UGA","Política territorial","Uso predominante","Uso condicionado","Uso incompatible"],
-          k:"scaffold", rows:[["","","","","",""]] });
+          head:HPOEL, k:tK("tablaPOEL"), rows: tRows("tablaPOEL",HPOEL,1) });
 
     H(3, "II.3 Parque industrial");
     if (g("parqueInd","No (predio independiente)").indexOf("No") === 0) P(D.BOILER.parqueIndustrial_no);
