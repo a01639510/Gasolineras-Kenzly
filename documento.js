@@ -294,7 +294,11 @@
     TBL({ title:"Tabla III.14. Región hidrológico-administrativa (acuífero)",
           head:["Clave","Acuífero","R","DNCOM","VCAS","VEXTET","DAS","Déficit"], k:"scaffold", rows: empty(2,8) });
     H(4, "III.4.3 Identificación de aspectos bióticos");
-    I("Caracterización de vegetación (tipo/cobertura/estado, base fisonómica florística de Rzedowski 1978) y fauna asociada (mamíferos, aves, anfibios y reptiles), con listados bibliográficos y estatus NOM-059-SEMARNAT. Fuentes: CONABIO (USV, SNIB, Enciclovida), CONANP.");
+    if (state && state.iaFloraFauna && String(state.iaFloraFauna).trim()) {
+      String(state.iaFloraFauna).trim().split(/\n{2,}/).forEach(par => { if (par.trim()) P(par.trim()); });
+    } else {
+      I("Caracterización de vegetación (tipo/cobertura/estado, base fisonómica florística de Rzedowski 1978) y fauna asociada (mamíferos, aves, anfibios y reptiles), con listados bibliográficos y estatus NOM-059-SEMARNAT. Fuentes: CONABIO (USV, SNIB, Enciclovida), CONANP.");
+    }
     FIGAREA("f22");
     FIGAREA("f23");
     TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI", head:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"], k:"scaffold", rows: empty(12,4) });

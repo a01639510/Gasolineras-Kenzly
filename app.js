@@ -166,7 +166,9 @@
     { id:"III4", grp:"III. Aspectos técnicos", titulo:"III.4 Diagnóstico ambiental", desc:"El Modelo Ecológico Conceptual (MEC) se incluye automáticamente.", fields:[
       {id:"incluirMEC", l:"Incluir texto de principios del MEC (boilerplate)", tipo:"check", b:"boiler", def:true},
       {id:"III4abierta", l:"Clima, geología, edafología, hidrología, flora/fauna, medio socioeconómico, diagnóstico", tipo:"open",
-        nota:"Sección ABIERTA: requiere mapas, cartas, listados de flora/fauna (NOM-059) y datos INEGI/CONAGUA. Guía ✎ conservada.", b:"abierta"}
+        nota:"Sección ABIERTA: requiere mapas, cartas, listados de flora/fauna (NOM-059) y datos INEGI/CONAGUA. Guía ✎ conservada.", b:"abierta"},
+      {id:"iaFloraFauna", l:"Flora y fauna (III.4.3) — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
+        nota:"Genera el diagnóstico biótico (vegetación + fauna + estatus NOM-059) con IA a partir de los datos del proyecto. Editable; se inserta en III.4.3 del documento."}
     ]},
 
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"La metodología (Leopold + Gómez-Orea + índices) y las escalas se incluyen automáticamente.", fields:[
@@ -231,8 +233,41 @@
     toc.innerHTML=tocHtml; form.innerHTML=formHtml;
     bindInputs();
     bindFiguras();
+    bindIA();
     setupScrollSpy();
     updateProgress();
+  }
+
+  // Redacción IA de secciones abiertas (llama a /api/redactar — función serverless en Vercel).
+  function bindIA(){
+    document.querySelectorAll(".ia-btn[data-ia]").forEach(btn=>{
+      btn.onclick = async ()=>{
+        const seccion = btn.dataset.ia, target = btn.dataset.target;
+        const status = document.querySelector('[data-ia-status="'+target+'"]');
+        const sup = g("superficie","");
+        const datos = {
+          nombre_proyecto: g("proyecto",""),
+          municipio: g("municipio",""),
+          estado: g("estado",""),
+          ubicacion: [g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+          superficie: sup ? (sup+" m²") : "",
+          en_anp: false
+        };
+        btn.disabled = true; const prev = btn.textContent; btn.textContent = "Redactando…";
+        if(status) status.textContent = " Generando con IA, espera unos segundos…";
+        try{
+          const r = await fetch("/api/redactar", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({seccion, datos}) });
+          const j = await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          if(!j.ok) throw new Error(j.error || ("HTTP "+r.status));
+          state[target] = j.texto; save(); renderForm();
+          toast("Redacción generada ✓ — revisa el texto y míralo en el documento (III.4.3)");
+        }catch(e){
+          if(status) status.textContent = " Error: "+e.message;
+          btn.disabled=false; btn.textContent=prev;
+          toast("Error IA: "+e.message);
+        }
+      };
+    });
   }
 
   // Render de un área de figuras (su lugar en la sección): + Agregar, título editable, miniatura
@@ -310,6 +345,10 @@
       case "estrategias": return renderEstrategias(f);
       case "instrumentos": return renderInstrumentos(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
+      case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
+        `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
+        `<span class="ia-status" data-ia-status="${esc(f.id)}" style="margin-left:10px;color:var(--muted,#888);font-size:13px"></span></div>`+
+        `<textarea data-f="${f.id}" placeholder="Aquí aparecerá el texto generado por IA (editable). Se inserta en III.4.3 del documento.">${esc(val)}</textarea></div>`;
     }
     let prev="";
     if(f.b==="boiler" && BOILER_PREVIEW[f.id]) prev=`<details class="boiler-prev"><summary>Ver texto que se generará</summary><div class="body" data-prev="${f.id}">${esc(BOILER_PREVIEW[f.id]())}</div></details>`;
