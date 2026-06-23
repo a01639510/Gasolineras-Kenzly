@@ -240,7 +240,7 @@
       {id:"incluirConclusion", l:"Incluir conclusión estándar", tipo:"check", b:"boiler", def:true}
     ]},
 
-    { id:”anexos”, grp:”VI. Anexos”, titulo:”VI. Planos y anexos”, desc:”Plano general y figuras adicionales (anexo fotográfico). Usa “+ Agregar imagen”.”, fields:[] }
+    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:'Plano general y figuras adicionales (anexo fotográfico). Usa "+ Agregar imagen".', fields:[] }
   ];
 
   // Lista de campos cerrados/boiler que cuentan para el progreso
@@ -490,7 +490,7 @@
       <div class="figarea-h"><span class="figarea-t">🖼️ ${esc(head)}</span>
         <button type="button" class="figadd" data-figadd="${esc(area.id)}">+ Agregar imagen</button></div>`;
     if(gatedOff) h+=`<div class="figarea-note">Esta subsección está desactivada; actívala para incluir sus figuras en el documento.</div>`;
-    if(!entries.length) h+=`<div class="figarea-empty">Sin imágenes. Usa “+ Agregar imagen”.</div>`;
+    if(!entries.length) h+=`<div class="figarea-empty">Sin imágenes. Usa "+ Agregar imagen".</div>`;
     entries.forEach(f=>{
       const src=imgCache[f.id];
       const numLbl = f.num!=null ? ("Figura "+f.num+".") : (area.numbered===false ? "Imagen" : "Figura —");
