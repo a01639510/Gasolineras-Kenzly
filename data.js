@@ -27,10 +27,22 @@
   //    Sólo se ajustan capacidad y proveedor por proyecto.
   // -------------------------------------------------------------------
   const SUSTANCIAS = {
-    "Gasolina regular":  { estado: "Líquido", categoria: "Inflamable", cretib: "I (Inflamable)", cas: "86290-81-5" },
-    "Gasolina Premium":  { estado: "Líquido", categoria: "Inflamable", cretib: "I (Inflamable)", cas: "86290-81-5" },
-    "Diésel Automotriz": { estado: "Líquido", categoria: "Combustible", cretib: "I (Inflamable)", cas: "68334-30-5" }
+    "Gasolina regular":  { tanqueId:"T-01", estado:"Líquido", categoria:"Inflamable", cretib:"I (Inflamable)", cas:"86290-81-5" },
+    "Gasolina Premium":  { tanqueId:"T-02", estado:"Líquido", categoria:"Inflamable", cretib:"I (Inflamable)", cas:"86290-81-5" },
+    "Diésel Automotriz": { tanqueId:"T-03", estado:"Líquido", categoria:"Combustible", cretib:"I (Inflamable)", cas:"68334-30-5" }
   };
+
+  // Valores default para III.2.2 y III.2.3 (el usuario puede editar/agregar filas)
+  const SUS_CONSTRUCCION_DEFAULT = [
+    { prod:"Pintura anticorrosiva", vol:"50 l", estado:"Líquido", cretib:"I, T", cas:"7732-18-5",   area:"Tanques, líneas",   prov:"Sherwin-Williams" },
+    { prod:"Soldadura Flux-Core",   vol:"20 kg", estado:"Sólido",  cretib:"I",    cas:"1338-85-2",  area:"Conexiones, bridas", prov:"Lincoln Electric" },
+    { prod:"Diésel (equipos obra)", vol:"200 l", estado:"Líquido", cretib:"I",    cas:"68476-34-6", area:"Maquinaria pesada",  prov:"Pemex" }
+  ];
+  const SUS_OPERACION_DEFAULT = [
+    { prod:"Aceite lubricante SAE 20W-50", vol:"20 l/año",   estado:"Líquido", cretib:"T, H", cas:"64742-88-7", area:"Bombas de trasiego",   prov:"Mobil" },
+    { prod:"Solvente limpieza SRV",        vol:"10 l/año",   estado:"Líquido", cretib:"I, T", cas:"71-36-3",   area:"Sistema de vapores",  prov:"Química Mexicana" },
+    { prod:"Diésel para generador backup", vol:"500 l/año",  estado:"Líquido", cretib:"I",    cas:"68476-34-6",area:"Generador de respaldo", prov:"Pemex" }
+  ];
 
   // -------------------------------------------------------------------
   // 3) BOILERPLATE NACIONAL (texto fijo con variables {{...}})
@@ -252,7 +264,8 @@
   ];
 
   window.IPDATA = {
-    CONSULTORA, SUSTANCIAS, BOILER, REFERENCIAS,
+    CONSULTORA, SUSTANCIAS, SUS_CONSTRUCCION_DEFAULT, SUS_OPERACION_DEFAULT,
+    BOILER, REFERENCIAS,
     ESTRATEGIAS_POEGT, DISPOSICIONES, ESTADOS, LISTA_ESTADOS, INSTRUMENTOS,
     CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID, AREAS
   };

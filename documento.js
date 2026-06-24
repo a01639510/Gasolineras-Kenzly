@@ -292,18 +292,25 @@
     I("Mencionar tipo, cantidades y adjuntar hoja de seguridad. Tipo y características (CRETIB), volumen de uso y almacenamiento, etapa o proceso, destino o uso final y tipo de transportación.");
     H(4, "III.2.1 Sustancias químicas peligrosas en tanque de almacenamiento");
     TBL({ title:"Tabla III.7. Identificación de sustancias químicas peligrosas en tanque de almacenamiento",
-          head:["Producto","Estado físico","Categoría","Clave CRETIB","No. CAS","Capacidad (m³)","Proveedor"],
-          k:"auto", rows: Object.keys(D.SUSTANCIAS).map(n=>{ const c=D.SUSTANCIAS[n]; const s=state.sustancias[n]||{};
-            return [n, c.estado, c.categoria, c.cretib, c.cas, s.cap||"", s.prov||""]; }) });
+          head:["ID Tanque","Producto","Estado físico","Categoría","Clave CRETIB","No. CAS","Capacidad (gal)","Proveedor"],
+          k:"auto", rows: Object.keys(D.SUSTANCIAS).map(n=>{
+            const c=D.SUSTANCIAS[n]; const s=state.sustancias&&state.sustancias[n]||{};
+            return [s.tanqueId||c.tanqueId||"", n, c.estado, c.categoria, c.cretib, c.cas, s.cap||"", s.prov||""]; }) });
     FIGAREA("f13");
     H(4, "III.2.2 Sustancias químicas peligrosas de uso en construcción");
     TBL({ title:"Tabla III.8. Sustancias químicas peligrosas en construcción",
           head:["Producto (nombre comercial)","Volúmenes","Estado físico","Clave CRETIB","No. CAS","Área de uso","Proveedor"],
-          k:"scaffold", rows: empty(3,7) });
+          k: (state.sus_construccion&&state.sus_construccion.length)?"auto":"scaffold",
+          rows: (state.sus_construccion&&state.sus_construccion.length)
+            ? state.sus_construccion.map(r=>[r.prod||"",r.vol||"",r.estado||"",r.cretib||"",r.cas||"",r.area||"",r.prov||""])
+            : empty(3,7) });
     H(4, "III.2.3 Sustancias químicas peligrosas en operación y mantenimiento");
     TBL({ title:"Tabla III.9. Sustancias químicas peligrosas en operación y mantenimiento",
           head:["Producto (nombre comercial)","Volúmenes","Estado físico","Clave CRETIB","No. CAS","Área de uso","Proveedor"],
-          k:"scaffold", rows: empty(3,7) });
+          k: (state.sus_operacion&&state.sus_operacion.length)?"auto":"scaffold",
+          rows: (state.sus_operacion&&state.sus_operacion.length)
+            ? state.sus_operacion.map(r=>[r.prod||"",r.vol||"",r.estado||"",r.cretib||"",r.cas||"",r.area||"",r.prov||""])
+            : empty(3,7) });
     H(4, "III.2.4 Determinación de actividad Altamente Riesgosa");
     I("Si se rebasa la “cantidad de reporte” → es obligatorio un Estudio de Riesgo como anexo (art. 18 REIA). Para ciertas actividades AHR podría requerirse MIA en lugar de IP; revisar viabilidad del IP antes de avanzar.");
 

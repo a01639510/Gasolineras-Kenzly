@@ -74,6 +74,8 @@
     if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
     if(!state.anexos || typeof state.anexos!=="object") state.anexos={};
     if(!state.tablas || typeof state.tablas!=="object") state.tablas={};
+    if(!Array.isArray(state.sus_construccion)) state.sus_construccion=D.SUS_CONSTRUCCION_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.sus_operacion))    state.sus_operacion=D.SUS_OPERACION_DEFAULT.map(r=>({...r}));
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   let _liveT=null;
@@ -203,8 +205,10 @@
         ]}
     ]},
 
-    { id:"III2", grp:"III. Aspectos técnicos", titulo:"III.2 Sustancias peligrosas", desc:"CRETIB y CAS pre-cargados. Sólo ajusta capacidad y proveedor.", fields:[
-      {id:"sustancias", l:"Sustancias en tanque de almacenamiento", tipo:"sustancias", b:"cerrada"}
+    { id:"III2", grp:"III. Aspectos técnicos", titulo:"III.2 Sustancias peligrosas", desc:"CRETIB y CAS pre-cargados. Ajusta ID tanque, capacidad (gal) y proveedor. Agrega filas en III.2.2 y III.2.3 según el proyecto.", fields:[
+      {id:"sustancias",       l:"III.2.1 Sustancias en tanques de almacenamiento",       tipo:"sustancias",  b:"cerrada"},
+      {id:"sus_construccion", l:"III.2.2 Sustancias peligrosas en construcción",          tipo:"susDinamica", b:"cerrada"},
+      {id:"sus_operacion",    l:"III.2.3 Sustancias peligrosas en operación y mantenimiento", tipo:"susDinamica", b:"cerrada"}
     ]},
 
     { id:"III3", grp:"III. Aspectos técnicos", titulo:"III.3 Emisiones, descargas y residuos", desc:"", fields:[
@@ -286,6 +290,15 @@
           const r=state.tablas&&state.tablas[t.key];
           if(Array.isArray(r)&&r.length) done++;
         });
+      } else if(f.tipo==="sustancias"){
+        Object.keys(D.SUSTANCIAS).forEach(name=>{
+          total++; const s=state.sustancias&&state.sustancias[name];
+          if(s&&String(s.cap||"").trim()&&String(s.prov||"").trim()) done++;
+        });
+      } else if(f.tipo==="susDinamica"){
+        total++;
+        const arr=state[f.id];
+        if(Array.isArray(arr)&&arr.some(r=>String(r.prod||"").trim())) done++;
       }
     });
     if(!total) return "neutral";
@@ -334,6 +347,7 @@
     bindChecklist();
     bindAnexos();
     bindTablaIA();
+    bindSusDinamica();
     bindImportar();
     setupScrollSpy();
     updateProgress();
@@ -579,6 +593,7 @@
         inner=`<label class="chk"><input type="checkbox" data-f="${f.id}" ${ (state[f.id]===undefined?f.def:state[f.id]) ? 'checked':''}> Activado</label>`; break;
       case "puntos": return renderPuntos(f);
       case "sustancias": return renderSustancias(f);
+      case "susDinamica": return renderSusDinamica(f);
       case "estrategias": return renderEstrategias(f);
       case "instrumentos": return renderInstrumentos(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
@@ -628,14 +643,44 @@
   }
 
   function renderSustancias(f){
+    const TH = s=>`<th style="text-align:left;padding:5px 7px;background:var(--verde-claro);border:1px solid var(--linea);white-space:nowrap;font-size:11.5px">${s}</th>`;
+    const TD = s=>`<td style="padding:4px 6px;border:1px solid var(--linea);font-size:11.5px">${s}</td>`;
+    const INP = (name,k,val,w,ph)=>`<input data-sus="${esc(name)}" data-k="${k}" value="${esc(val)}" placeholder="${ph||""}" style="width:${w}px;font-size:11.5px;padding:3px 5px;border:1px solid var(--linea);border-radius:4px;background:#fbfdfc">`;
     let rows = Object.keys(D.SUSTANCIAS).map(name=>{
-      const c = D.SUSTANCIAS[name]; const s = state.sustancias[name] || {cap:"",prov:""};
-      return `<tr><td><b>${esc(name)}</b></td><td>${esc(c.estado)}</td><td>${esc(c.cretib)}</td><td>${esc(c.cas)}</td>
-        <td><input data-sus="${esc(name)}" data-k="cap" value="${esc(s.cap)}" placeholder="m³" style="width:80px"></td>
-        <td><input data-sus="${esc(name)}" data-k="prov" value="${esc(s.prov)}" style="width:120px"></td></tr>`;
+      const c=D.SUSTANCIAS[name]; const s=state.sustancias[name]||{tanqueId:c.tanqueId,cap:"",prov:""};
+      return `<tr>
+        ${TD(INP(name,"tanqueId",s.tanqueId||c.tanqueId||"",50))}
+        ${TD(`<b>${esc(name)}</b>`)}
+        ${TD(esc(c.estado))}
+        ${TD(esc(c.cretib))}
+        ${TD(esc(c.cas))}
+        ${TD(`<span style="display:flex;align-items:center;gap:4px">${INP(name,"cap",s.cap,80,"10,000")}<span style="font-size:10.5px;color:var(--gris)">gal</span></span>`)}
+        ${TD(INP(name,"prov",s.prov,110,"Pemex"))}
+      </tr>`;
     }).join("");
-    return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label>
-      <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Producto</th><th>Estado</th><th>CRETIB</th><th>CAS</th><th>Capacidad</th><th>Proveedor</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const heads = ["ID Tanque","Producto","Estado físico","Clave CRETIB","No. CAS","Capacidad (gal)","Proveedor"].map(TH).join("");
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+
+  const SUS_DIN_COLS = ["Producto (nombre comercial)","Volúmenes","Estado físico","Clave CRETIB","No. CAS","Área de uso","Proveedor"];
+  const SUS_DIN_KEYS = ["prod","vol","estado","cretib","cas","area","prov"];
+  const SUS_DIN_W    = [190, 75, 75, 70, 85, 130, 110];
+
+  function renderSusDinamica(f){
+    const key=f.id; const rows=state[key]||[];
+    const TH = s=>`<th style="text-align:left;padding:5px 7px;background:var(--verde-claro);border:1px solid var(--linea);white-space:nowrap;font-size:11.5px">${s}</th>`;
+    const heads = SUS_DIN_COLS.map(TH).join("")+`<th></th>`;
+    const rowsHtml = rows.map((r,i)=>{
+      const cells = SUS_DIN_KEYS.map((k,j)=>
+        `<td style="padding:3px 4px;border:1px solid var(--linea)"><input data-sd="${esc(key)}" data-row="${i}" data-k="${k}" value="${esc(r[k]||"")}" style="width:${SUS_DIN_W[j]}px;font-size:11.5px;padding:3px 5px;border:1px solid var(--linea);border-radius:4px;background:#fbfdfc"></td>`
+      ).join("");
+      return `<tr>${cells}<td style="border:1px solid var(--linea);text-align:center"><button class="sd-del" data-sd="${esc(key)}" data-row="${i}" title="Eliminar fila" style="border:none;background:transparent;color:#b3261e;cursor:pointer;font-size:14px;padding:1px 5px;line-height:1">×</button></td></tr>`;
+    }).join("") || `<tr><td colspan="${SUS_DIN_COLS.length+1}" style="padding:10px;color:var(--gris);font-size:12px;text-align:center;font-style:italic">Sin filas — usa "+ Agregar fila"</td></tr>`;
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>${heads}</tr></thead><tbody>${rowsHtml}</tbody></table></div>
+      <button class="sd-add" data-sd="${esc(key)}" style="margin-top:7px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--verde);background:var(--verde-tint);border:1px solid #cfe0d6;border-radius:6px;cursor:pointer">+ Agregar fila</button>
+    </div>`;
   }
 
   function renderEstrategias(f){
@@ -666,6 +711,33 @@
   };
 
   // ============== BINDINGS ==============
+  function bindSusDinamica(){
+    const form=document.getElementById("form"); if(!form) return;
+    form.querySelectorAll("input[data-sd]").forEach(inp=>{
+      inp.addEventListener("input",()=>{
+        const {sd,row,k}=inp.dataset;
+        if(!state[sd]) state[sd]=[];
+        if(!state[sd][+row]) state[sd][+row]={};
+        state[sd][+row][k]=inp.value; save();
+      });
+    });
+    form.querySelectorAll("button.sd-add").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const key=btn.dataset.sd;
+        if(!state[key]) state[key]=[];
+        state[key].push({prod:"",vol:"",estado:"Líquido",cretib:"",cas:"",area:"",prov:""});
+        save(); renderForm();
+      });
+    });
+    form.querySelectorAll("button.sd-del").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const {sd,row}=btn.dataset;
+        if(state[sd]&&state[sd].length>0) state[sd].splice(+row,1);
+        save(); renderForm();
+      });
+    });
+  }
+
   function bindInputs(){
     $("#form").querySelectorAll("[data-f]").forEach(el=>{
       const ev = (el.type==="checkbox") ? "change" : "input";
@@ -712,6 +784,8 @@
       if(FL[f.tipo]){ total++; const v=state[f.id]!=null?state[f.id]:(f.def!=null?f.def:""); if(v!==""&&String(v).trim()!=="") done++; }
       else if(f.tipo==="ia"){ total++; if(state[f.id]&&String(state[f.id]).trim()) done++; }
       else if(f.tipo==="tablaIA"){ (f.tablas||[]).forEach(t=>{ total++; const r=state.tablas&&state.tablas[t.key]; if(Array.isArray(r)&&r.length) done++; }); }
+      else if(f.tipo==="sustancias"){ Object.keys(D.SUSTANCIAS).forEach(name=>{ total++; const s=state.sustancias&&state.sustancias[name]; if(s&&String(s.cap||"").trim()&&String(s.prov||"").trim()) done++; }); }
+      else if(f.tipo==="susDinamica"){ total++; const arr=state[f.id]; if(Array.isArray(arr)&&arr.some(r=>String(r.prod||"").trim())) done++; }
     }));
     const pct=total?Math.round(done/total*100):0;
     const bar=$("#progBar"); if(bar) bar.style.width=pct+"%";
