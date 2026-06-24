@@ -45,7 +45,56 @@
   ];
 
   // -------------------------------------------------------------------
-  // 3) BOILERPLATE NACIONAL (texto fijo con variables {{...}})
+  // 3a) DEFAULTS III.3 — Residuos y Ruido
+  // -------------------------------------------------------------------
+  const RESIDUOS_DEFAULT = [
+    { tipo:"RSU (cartón, vidrio, plástico)",              etapa:"Operación",    gen:"500 kg/año",  clas:"Reciclable",                        gest:"Acopio + reciclador municipal",                gestor:"Por definir" },
+    { tipo:"RME (filtros, trapos, aserrín contaminados)", etapa:"Operación",    gen:"150 kg/año",  clas:"NOM-001-ASEA-2019",                 gest:"Almacén temporal ≤72 h + empresa autorizada",  gestor:"Por definir" },
+    { tipo:"RP (aceites lubricantes usados)",             etapa:"Operación",    gen:"100 l/año",   clas:"CRETIB – NOM-052-SEMARNAT-2005",    gest:"Manifiestos + empresa recicladora de RP",      gestor:"Por definir" },
+    { tipo:"RCD (escombro, concreto, acero)",             etapa:"Construcción", gen:"50 m³ (est)", clas:"Concreto, acero, tierra",           gest:"Acopio en sitio + gestor RCD municipal",       gestor:"Por definir" }
+  ];
+
+  const RUIDO_DEFAULT = [
+    { fuente:"Bomba de trasiego",           db:"75",    ubi:"Cuarto de máquinas",  freq:"Diaria, 1–2 h",    cumpl:"Recinto cerrado — dentro de límite NOM-081 (65 dB día)" },
+    { fuente:"Compresor de aire",           db:"78",    ubi:"Cuarto de máquinas",  freq:"Diaria, 0.5–1 h",  cumpl:"Aislamiento acústico — dentro de límite NOM-081" },
+    { fuente:"Tráfico vehicular clientes",  db:"70–75", ubi:"Acceso vehicular",    freq:"Continua",          cumpl:"Fuente móvil exterior — aceptable en zona comercial" },
+    { fuente:"Dispensadores (bombas)",      db:"60–65", ubi:"Islote central",      freq:"Diaria",            cumpl:"Bajo límite NOM-081 (65 dB día)" }
+  ];
+
+  // -------------------------------------------------------------------
+  // 3b) DEFAULTS III.4 — Abióticos (columnas: parámetro / valor)
+  //     El usuario llena los valores desde INEGI/CONAGUA/SMN
+  // -------------------------------------------------------------------
+  const CLIMA_DEFAULT = [
+    { param:"Código Köppen-García",      val:"" },
+    { param:"Descripción",               val:"" },
+    { param:"Temperatura media anual",   val:"" },
+    { param:"Precipitación media anual", val:"" },
+    { param:"Temporada de lluvias",      val:"" }
+  ];
+  const SUELO_DEFAULT = [
+    { param:"Unidad de suelo (FAO-INEGI)",                   val:"" },
+    { param:"Descripción / características",                  val:"" },
+    { param:"Vulnerabilidad a contaminación por HC",          val:"" }
+  ];
+  const HIDRO_DEFAULT = [
+    { param:"Región Hidrológica",             val:"" },
+    { param:"Cuenca hidrológica",             val:"" },
+    { param:"Subcuenca",                      val:"" }
+  ];
+  const ACUIFERO_DEFAULT = [
+    { param:"Nombre y clave CONAGUA",                         val:"" },
+    { param:"Disponibilidad media anual (DAS, Mm³/año)",      val:"" },
+    { param:"Profundidad al nivel freático (m)",              val:"" },
+    { param:"Vulnerabilidad a infiltración de hidrocarburos", val:"" }
+  ];
+  const RECEPTORES_DEFAULT = [
+    { no:"1", tipo:"", nombre:"", dist:"", dir:"", pob:"", obs:"" },
+    { no:"2", tipo:"", nombre:"", dist:"", dir:"", pob:"", obs:"" }
+  ];
+
+  // -------------------------------------------------------------------
+  // 4) BOILERPLATE NACIONAL (texto fijo con variables {{...}})
   // -------------------------------------------------------------------
   const BOILER = {
     introduccion:
@@ -265,6 +314,8 @@
 
   window.IPDATA = {
     CONSULTORA, SUSTANCIAS, SUS_CONSTRUCCION_DEFAULT, SUS_OPERACION_DEFAULT,
+    RESIDUOS_DEFAULT, RUIDO_DEFAULT,
+    CLIMA_DEFAULT, SUELO_DEFAULT, HIDRO_DEFAULT, ACUIFERO_DEFAULT, RECEPTORES_DEFAULT,
     BOILER, REFERENCIAS,
     ESTRATEGIAS_POEGT, DISPOSICIONES, ESTADOS, LISTA_ESTADOS, INSTRUMENTOS,
     CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID, AREAS

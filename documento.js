@@ -318,16 +318,40 @@
     IAP("iaEmisiones");
     I("Describir procesos con diagrama de flujo; indicar entradas, rutas y balances; señalar sitios/etapas de generación de residuos líquidos, sólidos y ruido, con controles ambientales y evidencia analítica. Lógica N/A justificado cuando no aplique.");
     H(4, "III.3.1 Emisiones atmosféricas");
-    I("Señalar sitios/etapas con emisiones al aire, con énfasis en emisiones fijas y mención (no obligatoria) de scope 3.");
+    I("Fuente principal: vapores de combustibles (COV/VOC) controlados mediante Sistema de Recuperación de Vapores (SRV Fase I) conforme NOM-004-ASEA-2017.");
+    TBL({ title:"Tabla III.10a. Control de emisiones VOC — SRV",
+          head:["Parámetro","Valor"],
+          k:"auto",
+          rows:[
+            ["Sistema de Recuperación de Vapores (SRV)", g("srvMarca","[Marca y modelo — completar en formulario]")],
+            ["Eficiencia SRV — NOM-004-ASEA-2017 (Fase I)", g("srvEficiencia","≥ 95 %")],
+            ["Evidencia / certificación", g("srvDictamen","Dictamen de Verificación Unitaria vigente")]
+          ]
+        });
     H(4, "III.3.2 Descarga de aguas residuales");
-    I("Aguas sanitarias y aguas aceitosas; identificación de baños/sanitarios por etapa (preparación + construcción, operación + mantenimiento, abandono).");
+    I("Se generan aguas sanitarias (uso de baños) y aguas aceitosas (limpieza de islote y SRV). No se realizan descargas a cuerpos de agua nacionales.");
+    TBL({ title:"Tabla III.10b. Aguas residuales generadas en operación",
+          head:["Tipo","Origen","Volumen estimado","Tratamiento y destino"],
+          k:"auto",
+          rows:[
+            ["Sanitarias","Baños de personal y clientes", g("aguasSanitariaVol","[l/día]")+" l/día", g("aguasSanitariaDest","Fosa séptica in situ")],
+            ["Aceitosas","Limpieza islote, SRV y área de descarga", g("aguasAceitosaVol","[l/semana]"), g("aguasAceitosaTrat","Separador agua-aceite → empresa gestora de RP")]
+          ]
+        });
     H(4, "III.3.3 Residuos");
-    I("Definir generación estimada, manejo/control/tratamiento y disposición final por categoría: RSU, RME, RP, RCD.");
-    TBL({ title:"Tabla III.10. Generación, manejo y disposición de residuos por etapa",
-          head:["Etapa","Tipo de residuo (RSU/RME/RP/RCD)","Generación estimada","Manejo / control","Disposición final"],
-          k:"scaffold", rows: empty(4,5) });
+    I("Los residuos generados se clasifican conforme a la NOM-052-SEMARNAT-2005 (RP), NOM-001-ASEA-2019 (RME) y legislación general (RSU, RCD). Empresa gestora de RP: "+g("gestorRP","[nombre y registro SEMARNAT — completar]")+".");
+    { const rd=state.tablaResiduos;
+      TBL({ title:"Tabla III.10c. Generación, manejo y disposición de residuos por tipo y etapa",
+            head:["Tipo de residuo","Etapa","Generación / año","Clasificación NOM","Gestión / control","Gestor autorizado"],
+            k:(rd&&rd.length)?"auto":"scaffold",
+            rows:(rd&&rd.length)?rd.map(r=>[r.tipo||"",r.etapa||"",r.gen||"",r.clas||"",r.gest||"",r.gestor||""]):empty(4,6) }); }
     H(4, "III.3.4 Fuentes emisoras de ruido");
-    I("Señalar sitios/etapas con emisiones de ruido (revisar NOM-081-SEMARNAT-1994).");
+    I("Las fuentes de ruido de la estación de servicio se evalúan conforme a NOM-081-SEMARNAT-1994 (65 dB(A) diurno en zona comercial / residencial).");
+    { const rr=state.tablaRuido;
+      TBL({ title:"Tabla III.10d. Fuentes de ruido — NOM-081-SEMARNAT-1994",
+            head:["Fuente de ruido","dB(A) @ 1 m","Ubicación","Frecuencia","Cumplimiento NOM-081"],
+            k:(rr&&rr.length)?"auto":"scaffold",
+            rows:(rr&&rr.length)?rr.map(r=>[r.fuente||"",r.db||"",r.ubi||"",r.freq||"",r.cumpl||""]):empty(4,5) }); }
     H(4, "III.3.5 Diagrama de entradas y flujos");
     I("Diagrama de flujo que muestre entradas y salidas de insumos por etapa, con rutas y balances de materias primas, almacenamientos, productos y subproductos.");
     FIGAREA("f14");
@@ -338,23 +362,34 @@
     I("Definir AI primaria (predio y colindancias) y, si aplica, AI secundaria (aire/agua/ruido/movilidad). Justificar con tipo de proyecto, vientos dominantes y receptores sensibles. Fuentes: INEGI, SMN, planeación urbana municipal/POEL/POET.");
     FIGAREA("f15");
     H(4, "III.4.2 Identificación de aspectos abióticos");
-    I("Describir condiciones físicas y de calidad ambiental actuales. Fuentes transversales: INEGI (edafología, geología, hidrología, uso de suelo), CONAGUA (cuencas/subcuencas, REPDA), SIORE (Ordenamientos/UGA), atlas de riesgo municipal/estatal.");
+    I("Fuentes transversales: INEGI (edafología, geología, hidrología, uso de suelo), CONAGUA (cuencas/subcuencas, REPDA), SMN (clima), atlas de riesgo municipal/estatal. Los datos de las tablas siguientes provienen de dichas fuentes oficiales.");
     I("Clima: régimen de vientos (rosas), precipitación y temperatura; clasificación de Köppen modificada por E. García (1981).");
     FIGAREA("f16");
-    TBL({ title:"Tabla III.11. Distribución de climas (clasificación de Köppen-García)", head:["Código","Descripción"], k:"scaffold", rows: empty(2,2) });
+    { var tc=state.tablaClima;
+      TBL({ title:"Tabla III.11. Clima del sitio (clasificación Köppen-García)", head:["Parámetro","Valor"],
+            k:(tc&&tc.some(r=>r.val))?"auto":"scaffold",
+            rows:(tc&&tc.some(r=>r.val))?tc.map(r=>[r.param||"",r.val||""]):empty(3,2) }); }
     I("Geología y geomorfología: unidades geológicas, pendientes y procesos (inundación, subsidencia); estabilidad del sitio y drenajes.");
     FIGAREA("f17");
     FIGAREA("f18");
     I("Edafología: tipos de suelo, textura, drenaje y vulnerabilidad a contaminación; profundidad y compactación.");
     FIGAREA("f19");
-    TBL({ title:"Tabla III.12. Tipo de suelo presente en el sitio", head:["Unidad de suelo","Descripción"], k:"scaffold", rows: empty(3,2) });
+    { var ts=state.tablaSuelo;
+      TBL({ title:"Tabla III.12. Tipo de suelo presente en el sitio (INEGI FAO)", head:["Parámetro","Valor"],
+            k:(ts&&ts.some(r=>r.val))?"auto":"scaffold",
+            rows:(ts&&ts.some(r=>r.val))?ts.map(r=>[r.param||"",r.val||""]):empty(3,2) }); }
     I("Hidrología: región hidrológica (con código), cuenca y subcuenca; cauces, zonas de inundación y descargas cercanas.");
     FIGAREA("f20");
-    TBL({ title:"Tabla III.13. Regiones, cuencas y subcuencas del AI", head:["Región Hidrológica","Cuenca","Subcuenca"], k:"scaffold", rows: empty(2,3) });
-    I("Acuíferos: localización, disponibilidad media anual de agua subterránea, profundidad al nivel freático y vulnerabilidad a infiltración de hidrocarburos (NOM-011-CONAGUA-2000).");
+    { var th=state.tablaHidro;
+      TBL({ title:"Tabla III.13. Regiones, cuencas y subcuencas del AI (CONAGUA/INEGI)", head:["Parámetro","Valor"],
+            k:(th&&th.some(r=>r.val))?"auto":"scaffold",
+            rows:(th&&th.some(r=>r.val))?th.map(r=>[r.param||"",r.val||""]):empty(3,2) }); }
+    I("Acuíferos: localización, disponibilidad media anual de agua subterránea, profundidad al nivel freático y vulnerabilidad a infiltración de hidrocarburos (NOM-011-CONAGUA-2000). Consultar DOF de disponibilidad de acuíferos (CONAGUA).");
     FIGAREA("f21");
-    TBL({ title:"Tabla III.14. Región hidrológico-administrativa (acuífero)",
-          head:["Clave","Acuífero","R","DNCOM","VCAS","VEXTET","DAS","Déficit"], k:"scaffold", rows: empty(2,8) });
+    { var ta=state.tablaAcuifero;
+      TBL({ title:"Tabla III.14. Acuífero del área de influencia (CONAGUA — DOF)", head:["Parámetro","Valor"],
+            k:(ta&&ta.some(r=>r.val))?"auto":"scaffold",
+            rows:(ta&&ta.some(r=>r.val))?ta.map(r=>[r.param||"",r.val||""]):empty(4,2) }); }
     H(4, "III.4.3 Identificación de aspectos bióticos");
     if (state && state.iaFloraFauna && String(state.iaFloraFauna).trim()) {
       String(state.iaFloraFauna).trim().split(/\n{2,}/).forEach(par => { if (par.trim()) P(par.trim()); });
@@ -384,6 +419,11 @@
     H(4, "III.4.5 Análisis de cercanía (radio del AI, máx. 2.0 km)");
     I("Funcionalidad y servicios ecosistémicos; consideraciones normativas de distancias y compatibilidad; receptores sensibles dentro del radio; evaluación de riesgo y sensibilidad.");
     FIGAREA("f26");
+    { var tr=state.tablaReceptores;
+      TBL({ title:"Tabla III.22a. Receptores sensibles identificados en el AI (radio ≤ 2 km)",
+            head:["No.","Tipo de receptor","Nombre / descripción","Distancia (m)","Dirección","Capacidad / Pob.","Observaciones / riesgo"],
+            k:(tr&&tr.some(r=>r.tipo||r.nombre))?"auto":"scaffold",
+            rows:(tr&&tr.some(r=>r.tipo||r.nombre))?tr.map(r=>[r.no||"",r.tipo||"",r.nombre||"",r.dist||"",r.dir||"",r.pob||"",r.obs||""]):empty(3,7) }); }
     H(4, "III.4.6 Diagnóstico ambiental");
     I("Integrar lo anterior para concluir el estado de conservación/deterioro del AI y riesgos preexistentes; interacciones del sistema ambiental, subsistemas y Modelo Ecológico Conceptual (MEC).");
     FIGAREA("f27");

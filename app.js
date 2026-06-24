@@ -76,6 +76,15 @@
     if(!state.tablas || typeof state.tablas!=="object") state.tablas={};
     if(!Array.isArray(state.sus_construccion)) state.sus_construccion=D.SUS_CONSTRUCCION_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.sus_operacion))    state.sus_operacion=D.SUS_OPERACION_DEFAULT.map(r=>({...r}));
+    // III.3
+    if(!Array.isArray(state.tablaResiduos))    state.tablaResiduos=D.RESIDUOS_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaRuido))       state.tablaRuido=D.RUIDO_DEFAULT.map(r=>({...r}));
+    // III.4
+    if(!Array.isArray(state.tablaClima))       state.tablaClima=D.CLIMA_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaSuelo))       state.tablaSuelo=D.SUELO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaHidro))       state.tablaHidro=D.HIDRO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaAcuifero))    state.tablaAcuifero=D.ACUIFERO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaReceptores))  state.tablaReceptores=D.RECEPTORES_DEFAULT.map(r=>({...r}));
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   let _liveT=null;
@@ -211,26 +220,73 @@
       {id:"sus_operacion",    l:"III.2.3 Sustancias peligrosas en operación y mantenimiento", tipo:"susDinamica", b:"cerrada"}
     ]},
 
-    { id:"III3", grp:"III. Aspectos técnicos", titulo:"III.3 Emisiones, descargas y residuos", desc:"", fields:[
-      {id:"III3abierta", l:"Emisiones atmosféricas, descargas, residuos (RSU/RME/RP/RCD), ruido y diagrama de flujos", tipo:"open",
-        nota:"Sección ABIERTA: especificar por etapa (preparación, construcción, operación, abandono) con medidas de control. Guía ✎ conservada.", b:"abierta"},
-      {id:"iaEmisiones", l:"Emisiones y residuos (III.3) — redacción con IA", tipo:"ia", seccion:"emisiones_residuos", b:"abierta",
-        nota:"Genera III.3 (VOC con/sin SRV, descargas, RSU/RME/RP/RCD, ruido) con IA. Editable; se inserta en III.3."}
+    { id:"III3", grp:"III. Aspectos técnicos", titulo:"III.3 Emisiones, descargas y residuos", desc:"Completa los campos del SRV y aguas residuales. Las tablas de residuos y ruido vienen pre-llenadas; edita y agrega filas según el proyecto.", fields:[
+      {id:"iaEmisiones", l:"Redacción narrativa III.3 (IA)", tipo:"ia", seccion:"emisiones_residuos", b:"abierta",
+        nota:"Genera la narrativa de III.3 (VOC, SRV, descargas, residuos, ruido) con IA. Editable; se inserta al inicio de III.3."},
+      // III.3.1 — SRV
+      {id:"srvMarca",      l:"III.3.1 SRV — Marca y modelo (Fase I)",          tipo:"text", b:"cerrada", hint:"Ej: Husky X-1800, OPW 11A"},
+      {id:"srvEficiencia", l:"Eficiencia SRV (NOM-004-ASEA-2017, Fase I)",     tipo:"text", b:"cerrada", def:"≥ 95 %"},
+      {id:"srvDictamen",   l:"Evidencia / dictamen UV",                         tipo:"text", b:"cerrada", def:"Dictamen de Verificación Unitaria vigente"},
+      // III.3.2 — Aguas residuales
+      {id:"aguasSanitariaVol",  l:"III.3.2 Aguas sanitarias — Volumen (l/día)",      tipo:"text", b:"cerrada", def:"80"},
+      {id:"aguasSanitariaDest", l:"Aguas sanitarias — Destino / tratamiento",         tipo:"text", b:"cerrada", def:"Fosa séptica in situ (capacidad 3 m³)"},
+      {id:"aguasAceitosaVol",   l:"Aguas aceitosas — Volumen estimado",               tipo:"text", b:"cerrada", def:"20 l/semana"},
+      {id:"aguasAceitosaTrat",  l:"Aguas aceitosas — Tratamiento y disposición",      tipo:"text", b:"cerrada", def:"Separador agua-aceite → empresa gestora de RP"},
+      {id:"gestorRP",           l:"Empresa gestora de RP (nombre y registro SEMARNAT)", tipo:"text", b:"cerrada"},
+      // III.3.3 — Residuos (tabla dinámica)
+      {id:"tablaResiduos", l:"III.3.3 Residuos por tipo, etapa y disposición", tipo:"susDinamica", b:"cerrada",
+        cols:[
+          {k:"tipo",  l:"Tipo de residuo (RSU/RME/RP/RCD)", w:210},
+          {k:"etapa", l:"Etapa",                             w:100},
+          {k:"gen",   l:"Generación / año",                  w:100},
+          {k:"clas",  l:"Clasificación NOM",                 w:180},
+          {k:"gest",  l:"Gestión / control",                 w:200},
+          {k:"gestor",l:"Gestor autorizado",                 w:140}
+        ]},
+      // III.3.4 — Ruido (tabla dinámica)
+      {id:"tablaRuido", l:"III.3.4 Fuentes emisoras de ruido (NOM-081-SEMARNAT-1994)", tipo:"susDinamica", b:"cerrada",
+        cols:[
+          {k:"fuente", l:"Fuente de ruido",           w:180},
+          {k:"db",     l:"dB(A) @ 1 m",               w:80},
+          {k:"ubi",    l:"Ubicación",                  w:130},
+          {k:"freq",   l:"Frecuencia",                 w:120},
+          {k:"cumpl",  l:"Cumplimiento NOM-081",       w:200}
+        ]}
     ]},
 
-    { id:"III4", grp:"III. Aspectos técnicos", titulo:"III.4 Diagnóstico ambiental", desc:"El Modelo Ecológico Conceptual (MEC) se incluye automáticamente.", fields:[
-      {id:"incluirMEC", l:"Incluir texto de principios del MEC (boilerplate)", tipo:"check", b:"boiler", def:true},
-      {id:"III4abierta", l:"Clima, geología, edafología, hidrología, flora/fauna, medio socioeconómico, diagnóstico", tipo:"open",
-        nota:"Sección ABIERTA: requiere mapas, cartas, listados de flora/fauna (NOM-059) y datos INEGI/CONAGUA. Guía ✎ conservada.", b:"abierta"},
-      {id:"iaFloraFauna", l:"Flora y fauna (III.4.3) — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
-        nota:"Genera el diagnóstico biótico (vegetación + fauna + estatus NOM-059) con IA a partir de los datos del proyecto. Editable; se inserta en III.4.3 del documento."},
+    { id:"III4", grp:"III. Aspectos técnicos", titulo:"III.4 Diagnóstico ambiental", desc:"Abióticos: datos de INEGI/CONAGUA/SMN. Bióticos: usa IA. Receptores sensibles: agrega los que estén dentro de 2 km.", fields:[
+      {id:"incluirMEC", l:"Incluir texto principios del MEC (boilerplate)", tipo:"check", b:"boiler", def:true},
+      // III.4.2 Abióticos — tablas de parámetro/valor
+      {id:"tablaClima", l:"III.4.2a Clima (fuente: SMN / INEGI — Köppen-García)", tipo:"susDinamica", b:"cerrada",
+        cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
+      {id:"tablaSuelo", l:"III.4.2b Edafología (fuente: INEGI — carta edafológica)", tipo:"susDinamica", b:"cerrada",
+        cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
+      {id:"tablaHidro", l:"III.4.2c Hidrología superficial (fuente: CONAGUA / INEGI)", tipo:"susDinamica", b:"cerrada",
+        cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
+      {id:"tablaAcuifero", l:"III.4.2d Acuífero (fuente: CONAGUA — DOF disponibilidad)", tipo:"susDinamica", b:"cerrada",
+        cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
+      // III.4.3 Bióticos — IA + tablaIA
+      {id:"iaFloraFauna", l:"III.4.3 Flora y fauna — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
+        nota:"Genera el diagnóstico biótico (vegetación + fauna NOM-059) con IA. Editable; se inserta en III.4.3."},
       {id:"tablaBiota", l:"Listados de flora y fauna (Tablas III.15–III.18) — llenar con IA", tipo:"tablaIA", b:"abierta",
-        nota:"Pega el listado de especies (o adjunta una imagen de la tabla/listado) y la IA llena las 4 tablas (flora, mamíferos, aves, anfibios/reptiles) SIN límite de filas. Se vuelcan al documento.",
+        nota:"Pega listado de especies (o imagen) y la IA llena las 4 tablas SIN límite de filas. Se vuelcan al documento.",
         tablas:[
           {key:"tablaFlora",     titulo:"Flora",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
           {key:"tablaMamiferos", titulo:"Mamíferos",           columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
           {key:"tablaAvifauna",  titulo:"Avifauna",            columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
           {key:"tablaHerpeto",   titulo:"Anfibios y reptiles", columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
+        ]},
+      // III.4.5 Receptores sensibles (radio ≤ 2 km)
+      {id:"tablaReceptores", l:"III.4.5 Receptores sensibles dentro del AI (radio ≤ 2 km)", tipo:"susDinamica", b:"cerrada",
+        nota:"Llenar desde trabajo de campo o Google Maps: escuelas, viviendas, hospitales, etc. dentro de 2 km del predio.",
+        cols:[
+          {k:"no",     l:"No.", w:36},
+          {k:"tipo",   l:"Tipo de receptor",      w:140},
+          {k:"nombre", l:"Nombre / descripción",  w:180},
+          {k:"dist",   l:"Dist. (m)",              w:70},
+          {k:"dir",    l:"Dirección",              w:80},
+          {k:"pob",    l:"Capacidad / Pob.",       w:100},
+          {k:"obs",    l:"Observaciones / riesgo", w:180}
         ]}
     ]},
 
@@ -663,23 +719,34 @@
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
 
-  const SUS_DIN_COLS = ["Producto (nombre comercial)","Volúmenes","Estado físico","Clave CRETIB","No. CAS","Área de uso","Proveedor"];
-  const SUS_DIN_KEYS = ["prod","vol","estado","cretib","cas","area","prov"];
-  const SUS_DIN_W    = [190, 75, 75, 70, 85, 130, 110];
+  // Columnas por defecto para el tipo susDinamica de III.2.x
+  const SUS_DIN_DEFAULT_COLS = [
+    {k:"prod",  l:"Producto (nombre comercial)", w:190},
+    {k:"vol",   l:"Volúmenes",                   w:75},
+    {k:"estado",l:"Estado físico",                w:75},
+    {k:"cretib",l:"Clave CRETIB",                 w:70},
+    {k:"cas",   l:"No. CAS",                      w:85},
+    {k:"area",  l:"Área de uso",                  w:130},
+    {k:"prov",  l:"Proveedor",                    w:110}
+  ];
 
   function renderSusDinamica(f){
-    const key=f.id; const rows=state[key]||[];
+    const key=f.id;
+    const cols = f.cols || SUS_DIN_DEFAULT_COLS;
+    const colKeys = cols.map(c=>c.k);
+    const rows=state[key]||[];
     const TH = s=>`<th style="text-align:left;padding:5px 7px;background:var(--verde-claro);border:1px solid var(--linea);white-space:nowrap;font-size:11.5px">${s}</th>`;
-    const heads = SUS_DIN_COLS.map(TH).join("")+`<th></th>`;
+    const heads = cols.map(c=>TH(c.l)).join("")+`<th style="border:1px solid var(--linea);width:28px"></th>`;
+    const note = f.nota ? `<div class="open-note" style="margin-bottom:6px">${esc(f.nota)}</div>` : "";
     const rowsHtml = rows.map((r,i)=>{
-      const cells = SUS_DIN_KEYS.map((k,j)=>
-        `<td style="padding:3px 4px;border:1px solid var(--linea)"><input data-sd="${esc(key)}" data-row="${i}" data-k="${k}" value="${esc(r[k]||"")}" style="width:${SUS_DIN_W[j]}px;font-size:11.5px;padding:3px 5px;border:1px solid var(--linea);border-radius:4px;background:#fbfdfc"></td>`
+      const cells = cols.map(c=>
+        `<td style="padding:2px 3px;border:1px solid var(--linea)"><input data-sd="${esc(key)}" data-row="${i}" data-k="${esc(c.k)}" value="${esc(r[c.k]||"")}" style="width:${c.w}px;font-size:11.5px;padding:3px 5px;border:1px solid var(--linea);border-radius:3px;background:#fbfdfc"></td>`
       ).join("");
-      return `<tr>${cells}<td style="border:1px solid var(--linea);text-align:center"><button class="sd-del" data-sd="${esc(key)}" data-row="${i}" title="Eliminar fila" style="border:none;background:transparent;color:#b3261e;cursor:pointer;font-size:14px;padding:1px 5px;line-height:1">×</button></td></tr>`;
-    }).join("") || `<tr><td colspan="${SUS_DIN_COLS.length+1}" style="padding:10px;color:var(--gris);font-size:12px;text-align:center;font-style:italic">Sin filas — usa "+ Agregar fila"</td></tr>`;
-    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>
-      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>${heads}</tr></thead><tbody>${rowsHtml}</tbody></table></div>
-      <button class="sd-add" data-sd="${esc(key)}" style="margin-top:7px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--verde);background:var(--verde-tint);border:1px solid #cfe0d6;border-radius:6px;cursor:pointer">+ Agregar fila</button>
+      return `<tr>${cells}<td style="border:1px solid var(--linea);text-align:center;padding:0"><button class="sd-del" data-sd="${esc(key)}" data-row="${i}" title="Eliminar" style="border:none;background:transparent;color:#b3261e;cursor:pointer;font-size:14px;padding:2px 5px;line-height:1">×</button></td></tr>`;
+    }).join("") || `<tr><td colspan="${cols.length+1}" style="padding:10px;color:var(--gris);font-size:12px;text-align:center;font-style:italic">Sin filas — usa &quot;+ Agregar fila&quot;</td></tr>`;
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="overflow-x:auto"><table style="border-collapse:collapse"><thead><tr>${heads}</tr></thead><tbody>${rowsHtml}</tbody></table></div>
+      <button class="sd-add" data-sd="${esc(key)}" data-keys="${esc(colKeys.join(","))}" style="margin-top:7px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--verde);background:var(--verde-tint);border:1px solid #cfe0d6;border-radius:6px;cursor:pointer">+ Agregar fila</button>
     </div>`;
   }
 
@@ -725,7 +792,11 @@
       btn.addEventListener("click",()=>{
         const key=btn.dataset.sd;
         if(!state[key]) state[key]=[];
-        state[key].push({prod:"",vol:"",estado:"Líquido",cretib:"",cas:"",area:"",prov:""});
+        const keys=btn.dataset.keys?btn.dataset.keys.split(","):["prod","vol","estado","cretib","cas","area","prov"];
+        const newRow={}; keys.forEach(k=>{newRow[k]="";});
+        // Valor por defecto para columnas comunes
+        if("estado" in newRow) newRow.estado="Líquido";
+        state[key].push(newRow);
         save(); renderForm();
       });
     });
