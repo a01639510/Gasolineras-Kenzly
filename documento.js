@@ -405,16 +405,22 @@
     TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI", head:HBIO, k:tK("tablaHerpeto"), rows: tRows("tablaHerpeto",HBIO,8) });
     FIGAREA("f24");
     H(4, "III.4.4 Medio socioeconómico y cultural");
-    I("Densidad poblacional, pueblos originarios, desempleo, economía, vivienda, rezago social, zonas de atención prioritaria, valor cultural y patrimonio (INEGI Censo, INAH, CONABIO, CONANP).");
-    TBL({ title:"Tabla III.19. Datos de población (últimos 3 años) del municipio de " + g("municipio","______"),
-          head:["Año","Mujeres","Hombres","Total de habitantes"], k:"scaffold", rows: empty(3,4) });
-    TBL({ title:"Tabla III.20. Pirámide de edades del municipio",
-          head:["Franja de edad","Mujeres","Hombres","Total"], k:"scaffold", rows: empty(6,4) });
-    TBL({ title:"Tabla III.21. Otros datos demográficos, vivienda y servicios",
-          head:["Indicador","Valor"], k:"scaffold",
-          rows:[["Índice de fecundidad",""],["Población indígena (%)",""],["Población ocupada >12 años",""],
-                ["Viviendas particulares habitadas",""],["Viviendas con electricidad",""],["Viviendas con agua entubada",""],
-                ["Viviendas con drenaje/excusado",""],["Viviendas con internet",""]] });
+    I("Fuente: INEGI — Censos de Población y Vivienda 2010, 2015 y 2020; ENOE; CONEVAL (rezago social). Pueblos originarios: CDI/INPI. Patrimonio: INAH, CONABIO, CONANP.");
+    { var tp=state.tablaPoblacion;
+      TBL({ title:"Tabla III.19. Datos de población municipal — municipio de " + g("municipio","______") + " (INEGI Censos)",
+            head:["Año","Mujeres","Hombres","Total de habitantes"],
+            k:(tp&&tp.some(r=>r.mujeres||r.hombres||r.total))?"auto":"scaffold",
+            rows:(tp&&tp.some(r=>r.mujeres||r.hombres||r.total))?tp.map(r=>[r.anio||"",r.mujeres||"",r.hombres||"",r.total||""]):empty(3,4) }); }
+    { var tpi=state.tablaPiramide;
+      TBL({ title:"Tabla III.20. Pirámide de edades del municipio de " + g("municipio","______") + " (INEGI Censo 2020)",
+            head:["Franja de edad","Mujeres","Hombres","Total"],
+            k:(tpi&&tpi.some(r=>r.mujeres||r.hombres||r.total))?"auto":"scaffold",
+            rows:(tpi&&tpi.some(r=>r.mujeres||r.hombres||r.total))?tpi.map(r=>[r.franja||"",r.mujeres||"",r.hombres||"",r.total||""]):empty(6,4) }); }
+    { var tod=state.tablaOtrosDemog;
+      TBL({ title:"Tabla III.21. Indicadores de vivienda y servicios — municipio de " + g("municipio","______") + " (INEGI Censo 2020)",
+            head:["Indicador","Valor"],
+            k:(tod&&tod.some(r=>r.valor))?"auto":"scaffold",
+            rows:(tod&&tod.some(r=>r.valor))?tod.map(r=>[r.indicador||"",r.valor||""]):tod.map(r=>[r.indicador||"",""]) }); }
     FIGAREA("f25");
     H(4, "III.4.5 Análisis de cercanía (radio del AI, máx. 2.0 km)");
     I("Funcionalidad y servicios ecosistémicos; consideraciones normativas de distancias y compatibilidad; receptores sensibles dentro del radio; evaluación de riesgo y sensibilidad.");
@@ -457,9 +463,11 @@
     H(4, "III.5.5 Cruce de interacciones (matriz de Leopold adaptada)");
     I("Construir la matriz de Leopold (acción × factor), marcar solo interacciones con vía de exposición plausible y asignar ±M (0–5).");
     FIGAREA("f31");
-    TBL({ title:"Tabla III.25. Resumen de identificación de impactos por etapa",
-          head:["Etapa","Positivos (+)","Negativos (−)","Total"], k:"scaffold",
-          rows:[["Preparación de sitio y construcción","","",""],["Operación y mantenimiento","","",""],["Abandono de sitio","","",""],["Total","","",""]] });
+    { var tir=state.tablaImpactosResumen;
+      TBL({ title:"Tabla III.25. Resumen de identificación de impactos por etapa",
+            head:["Etapa","Positivos (+)","Negativos (−)","Total"],
+            k:(tir&&tir.some(r=>r.positivos||r.negativos||r.total))?"auto":"scaffold",
+            rows:(tir&&tir.length)?tir.map(r=>[r.etapa||"",r.positivos||"",r.negativos||"",r.total||""]):empty(4,4) }); }
     H(4, "III.5.6 Evaluación de criterios e índices");
     I("Construir la matriz de resultados con cálculos de índices (intensidad, básico, complementario, significancia), clase, medida, NOM y evidencia.");
     FIGAREA("f32");
@@ -467,8 +475,11 @@
     I("Identificar y describir los impactos más significativos (narrativa técnica de los “altos” y “medios” + medidas) por medio físico, biológico y socioeconómico, incluyendo riesgo tecnológico.");
     H(4, "III.5.8 Balance de impacto");
     I("Balance total del escenario: sumatoria neta por medio y por fase, y número de impactos por clase.");
-    TBL({ title:"Tabla III.26. Balance de impactos por medio",
-          head:["Medio","Σ ISIG (−)","Σ ISIG (+)","Balance neto","# Altos","# Medios"], k:"scaffold", rows: empty(4,6) });
+    { var tib=state.tablaImpactosBalance;
+      TBL({ title:"Tabla III.26. Balance de impactos por medio",
+            head:["Medio","Σ ISIG (−)","Σ ISIG (+)","Balance neto","# Altos","# Medios"],
+            k:(tib&&tib.some(r=>r.sig_neg||r.sig_pos||r.balance))?"auto":"scaffold",
+            rows:(tib&&tib.length)?tib.map(r=>[r.medio||"",r.sig_neg||"",r.sig_pos||"",r.balance||"",r.altos||"",r.medios||""]):empty(4,6) }); }
 
     H(3, "III.6 Determinación de medidas para su prevención y mitigación");
     IAP("iaMedidas");
@@ -488,7 +499,15 @@
     I("Supervisión y seguimiento: procedimientos para supervisar el cumplimiento de las medidas y el Programa de Vigilancia Ambiental.");
 
     H(3, "III.7 Condiciones adicionales para la sustentabilidad");
-    I("Buenas prácticas voluntarias: señalética, reforestación con especies nativas, reducción de consumo energético, capacitación, etc.");
+    I("Compromisos ambientales voluntarios que el promovente adopta más allá de las obligaciones normativas mínimas, con el fin de reforzar la viabilidad ambiental del proyecto y contribuir a la sustentabilidad local.");
+    if (!IAP("iaSustentabilidad")) {
+      I("Desarrollar narrativa: buenas prácticas voluntarias adoptadas (señalética, vegetación nativa, eficiencia energética, capacitación HSE, monitoreo, economía circular).");
+    }
+    { var tco=state.tablaCompromisos;
+      TBL({ title:"Tabla III.31. Compromisos ambientales voluntarios del promovente",
+            head:["Compromiso / buena práctica","Responsable","Plazo / etapa","Indicador de cumplimiento"],
+            k:(tco&&tco.some(r=>r.compromiso))?"auto":"scaffold",
+            rows:(tco&&tco.length)?tco.map(r=>[r.compromiso||"",r.responsable||"",r.plazo||"",r.indicador||""]):empty(5,4) }); }
 
     // ========================================================================
     // IV, V, VI (resumen — desarrollo completo en la próxima versión)

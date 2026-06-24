@@ -85,6 +85,15 @@
     if(!Array.isArray(state.tablaHidro))       state.tablaHidro=D.HIDRO_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaAcuifero))    state.tablaAcuifero=D.ACUIFERO_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaReceptores))  state.tablaReceptores=D.RECEPTORES_DEFAULT.map(r=>({...r}));
+    // III.4.4 socioeconómico
+    if(!Array.isArray(state.tablaPoblacion))   state.tablaPoblacion=D.POBLACION_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaPiramide))    state.tablaPiramide=D.PIRAMIDE_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaOtrosDemog))  state.tablaOtrosDemog=D.OTROS_DEMOG_DEFAULT.map(r=>({...r}));
+    // III.5 resumen/balance
+    if(!Array.isArray(state.tablaImpactosResumen))  state.tablaImpactosResumen=D.IMPACTOS_RESUMEN_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaImpactosBalance))  state.tablaImpactosBalance=D.IMPACTOS_BALANCE_DEFAULT.map(r=>({...r}));
+    // III.7 compromisos
+    if(!Array.isArray(state.tablaCompromisos)) state.tablaCompromisos=D.COMPROMISOS_DEFAULT.map(r=>({...r}));
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   let _liveT=null;
@@ -276,6 +285,29 @@
           {key:"tablaAvifauna",  titulo:"Avifauna",            columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
           {key:"tablaHerpeto",   titulo:"Anfibios y reptiles", columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
         ]},
+      // III.4.4 Medio socioeconómico — datos INEGI Censo
+      {id:"tablaPoblacion", l:"III.4.4a Población municipal (Censo INEGI — últimos 3 años)", tipo:"susDinamica", b:"cerrada",
+        nota:"Fuente: INEGI — Censos de Población y Vivienda (2020) y ENOE. Llenar con datos del municipio del proyecto.",
+        cols:[
+          {k:"anio",     l:"Año",      w:70},
+          {k:"mujeres",  l:"Mujeres",  w:100},
+          {k:"hombres",  l:"Hombres",  w:100},
+          {k:"total",    l:"Total",    w:100}
+        ]},
+      {id:"tablaPiramide", l:"III.4.4b Pirámide de edades municipal (Censo INEGI 2020)", tipo:"susDinamica", b:"cerrada",
+        nota:"Fuente: INEGI Censo 2020. Llenar con datos del municipio.",
+        cols:[
+          {k:"franja",   l:"Franja de edad",  w:130},
+          {k:"mujeres",  l:"Mujeres",         w:100},
+          {k:"hombres",  l:"Hombres",         w:100},
+          {k:"total",    l:"Total",           w:100}
+        ]},
+      {id:"tablaOtrosDemog", l:"III.4.4c Indicadores de vivienda y servicios (INEGI 2020)", tipo:"susDinamica", b:"cerrada",
+        nota:"Fuente: INEGI Censo 2020. Llenar con datos del municipio.",
+        cols:[
+          {k:"indicador", l:"Indicador",  w:300},
+          {k:"valor",     l:"Valor",      w:200}
+        ]},
       // III.4.5 Receptores sensibles (radio ≤ 2 km)
       {id:"tablaReceptores", l:"III.4.5 Receptores sensibles dentro del AI (radio ≤ 2 km)", tipo:"susDinamica", b:"cerrada",
         nota:"Llenar desde trabajo de campo o Google Maps: escuelas, viviendas, hospitales, etc. dentro de 2 km del predio.",
@@ -290,26 +322,53 @@
         ]}
     ]},
 
-    { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"La metodología (Leopold + Gómez-Orea + índices) y las escalas se incluyen automáticamente.", fields:[
+    { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"Metodología Leopold + Gómez-Orea incluida automáticamente. Llena tablas de resumen/balance tras construir la matriz.", fields:[
       {id:"incluirMetodo", l:"Incluir metodología y tablas de criterios/escalas (boilerplate)", tipo:"check", b:"boiler", def:true},
-      {id:"III5abierta", l:"Matriz de Leopold, evaluación de índices, descripción de impactos y balance", tipo:"open",
-        nota:"Sección ABIERTA: requiere construir la matriz de Leopold y la matriz de resultados con los cálculos del proyecto. Guía ✎ conservada.", b:"abierta"},
-      {id:"iaImpactos", l:"Identificación de impactos (III.5) — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
-        nota:"Genera III.5.7 (descripción de impactos altos/medios) y III.5.8 (balance) con IA, según la metodología Leopold/Gómez-Orea. Editable; se inserta en III.5."}
+      {id:"iaImpactos", l:"III.5.7/5.8 Descripción de impactos y balance — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
+        nota:"Genera la narrativa de impactos altos/medios y el balance neto por medio con IA (Leopold/Gómez-Orea). Editable."},
+      {id:"tablaImpactosResumen", l:"Tabla III.25 — Resumen de impactos por etapa", tipo:"susDinamica", b:"cerrada",
+        nota:"Llenar después de completar la matriz de Leopold (figura f31). Valores: conteo de impactos por signo.",
+        cols:[
+          {k:"etapa",     l:"Etapa",           w:220},
+          {k:"positivos", l:"Positivos (+)",   w:100},
+          {k:"negativos", l:"Negativos (−)",   w:100},
+          {k:"total",     l:"Total",           w:80}
+        ]},
+      {id:"tablaImpactosBalance", l:"Tabla III.26 — Balance de impactos por medio", tipo:"susDinamica", b:"cerrada",
+        nota:"Sumatoria de ISIG por medio ambiental. Derivar de la matriz de resultados.",
+        cols:[
+          {k:"medio",    l:"Medio",            w:150},
+          {k:"sig_neg",  l:"Σ ISIG (−)",       w:90},
+          {k:"sig_pos",  l:"Σ ISIG (+)",       w:90},
+          {k:"balance",  l:"Balance neto",     w:100},
+          {k:"altos",    l:"# Altos",          w:70},
+          {k:"medios",   l:"# Medios",         w:70}
+        ]}
     ]},
 
-    { id:"III6", grp:"III. Aspectos técnicos", titulo:"III.6 / III.7 Medidas y sustentabilidad", desc:"", fields:[
-      {id:"III6abierta", l:"Medidas de prevención/mitigación por etapa y condiciones adicionales", tipo:"open",
-        nota:"Sección ABIERTA: tablas de medidas por etapa (preparación, operación, abandono) + Programa de Vigilancia Ambiental. Guía ✎ conservada.", b:"abierta"},
-      {id:"iaMedidas", l:"Medidas de mitigación (III.6/III.7) — redacción con IA", tipo:"ia", seccion:"medidas", b:"abierta",
-        nota:"Genera las medidas por etapa (impacto, responsable, indicador, NOM) + Programa de Vigilancia con IA. Editable; se inserta en III.6."},
+    { id:"III6", grp:"III. Aspectos técnicos", titulo:"III.6 / III.7 Medidas y sustentabilidad", desc:"Las tablas de medidas se llenan con IA. III.7 incluye compromisos voluntarios.", fields:[
+      {id:"iaMedidas", l:"III.6 Medidas de mitigación — redacción con IA", tipo:"ia", seccion:"medidas", b:"abierta",
+        nota:"Genera la narrativa de medidas por etapa (impacto → medida → NOM → resultado). Editable."},
       {id:"tablaMedidas", l:"Tablas de medidas y vigilancia (III.27–III.30) — llenar con IA", tipo:"tablaIA", b:"abierta",
-        nota:"Pega los impactos/medidas (o adjunta una imagen) y la IA llena las tablas de medidas por etapa y el Programa de Vigilancia, SIN límite de filas. Se vuelcan al documento.",
+        nota:"Pega los impactos/medidas (o adjunta imagen) y la IA llena las 4 tablas sin límite de filas.",
         tablas:[
           {key:"tablaMedidasPrep", titulo:"Medidas — preparación/construcción", columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
           {key:"tablaMedidasOper", titulo:"Medidas — operación",                columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
           {key:"tablaMedidasAband",titulo:"Medidas — abandono",                 columnas:["Factor ambiental","Impacto / fuente","Medida de prevención/mitigación","Programa y responsable","NOM / marco legal","Resultado / impacto residual"]},
           {key:"tablaVigilancia",  titulo:"Programa de Vigilancia Ambiental",    columnas:["Etapa","Acción de vigilancia","Indicador verificable","Frecuencia","Responsable"]}
+        ]},
+      {id:"iaVigilancia", l:"III.6.1 Programa de Vigilancia — narrativa con IA", tipo:"ia", seccion:"vigilancia", b:"abierta",
+        nota:"Complementa las tablas con la narrativa del PVA (supervisión, reportes, periodicidad). Editable."},
+      // III.7
+      {id:"iaSustentabilidad", l:"III.7 Condiciones adicionales — redacción con IA", tipo:"ia", seccion:"sustentabilidad", b:"abierta",
+        nota:"Genera el texto de buenas prácticas voluntarias (señalética, vegetación, eficiencia energética, capacitación). Editable."},
+      {id:"tablaCompromisos", l:"III.7 Compromisos ambientales voluntarios", tipo:"susDinamica", b:"cerrada",
+        nota:"Buenas prácticas no obligatorias que refuerzan la viabilidad del proyecto. Edita o agrega filas.",
+        cols:[
+          {k:"compromiso",  l:"Compromiso / buena práctica", w:220},
+          {k:"responsable", l:"Responsable",                  w:130},
+          {k:"plazo",       l:"Plazo / etapa",                w:120},
+          {k:"indicador",   l:"Indicador de cumplimiento",    w:180}
         ]}
     ]},
 
@@ -354,7 +413,7 @@
       } else if(f.tipo==="susDinamica"){
         total++;
         const arr=state[f.id];
-        if(Array.isArray(arr)&&arr.some(r=>String(r.prod||"").trim())) done++;
+        if(Array.isArray(arr)&&arr.some(r=>Object.values(r).some(v=>String(v||"").trim()))) done++;
       }
     });
     if(!total) return "neutral";
@@ -856,7 +915,7 @@
       else if(f.tipo==="ia"){ total++; if(state[f.id]&&String(state[f.id]).trim()) done++; }
       else if(f.tipo==="tablaIA"){ (f.tablas||[]).forEach(t=>{ total++; const r=state.tablas&&state.tablas[t.key]; if(Array.isArray(r)&&r.length) done++; }); }
       else if(f.tipo==="sustancias"){ Object.keys(D.SUSTANCIAS).forEach(name=>{ total++; const s=state.sustancias&&state.sustancias[name]; if(s&&String(s.cap||"").trim()&&String(s.prov||"").trim()) done++; }); }
-      else if(f.tipo==="susDinamica"){ total++; const arr=state[f.id]; if(Array.isArray(arr)&&arr.some(r=>String(r.prod||"").trim())) done++; }
+      else if(f.tipo==="susDinamica"){ total++; const arr=state[f.id]; if(Array.isArray(arr)&&arr.some(r=>Object.values(r).some(v=>String(v||"").trim()))) done++; }
     }));
     const pct=total?Math.round(done/total*100):0;
     const bar=$("#progBar"); if(bar) bar.style.width=pct+"%";

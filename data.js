@@ -93,6 +93,54 @@
     { no:"2", tipo:"", nombre:"", dist:"", dir:"", pob:"", obs:"" }
   ];
 
+  // III.4.4 Socioeconómico — fuente INEGI Censo 2020
+  const POBLACION_DEFAULT = [
+    { anio:"2010", mujeres:"", hombres:"", total:"" },
+    { anio:"2015", mujeres:"", hombres:"", total:"" },
+    { anio:"2020", mujeres:"", hombres:"", total:"" }
+  ];
+  const PIRAMIDE_DEFAULT = [
+    { franja:"0–14 años",   mujeres:"", hombres:"", total:"" },
+    { franja:"15–29 años",  mujeres:"", hombres:"", total:"" },
+    { franja:"30–44 años",  mujeres:"", hombres:"", total:"" },
+    { franja:"45–59 años",  mujeres:"", hombres:"", total:"" },
+    { franja:"60–74 años",  mujeres:"", hombres:"", total:"" },
+    { franja:"75 años y más", mujeres:"", hombres:"", total:"" }
+  ];
+  const OTROS_DEMOG_DEFAULT = [
+    { indicador:"Índice de fecundidad (hijos por mujer)",      valor:"" },
+    { indicador:"Población indígena (%)",                       valor:"" },
+    { indicador:"Población ocupada >12 años (%)",               valor:"" },
+    { indicador:"Viviendas particulares habitadas",             valor:"" },
+    { indicador:"Viviendas con energía eléctrica (%)",          valor:"" },
+    { indicador:"Viviendas con agua entubada en la red (%)",    valor:"" },
+    { indicador:"Viviendas con drenaje o excusado (%)",         valor:"" },
+    { indicador:"Viviendas con internet (%)",                   valor:"" }
+  ];
+
+  // III.5 Identificación de impactos — resumen y balance
+  const IMPACTOS_RESUMEN_DEFAULT = [
+    { etapa:"Preparación de sitio y construcción", positivos:"", negativos:"", total:"" },
+    { etapa:"Operación y mantenimiento",            positivos:"", negativos:"", total:"" },
+    { etapa:"Abandono de sitio",                   positivos:"", negativos:"", total:"" },
+    { etapa:"Total",                               positivos:"", negativos:"", total:"" }
+  ];
+  const IMPACTOS_BALANCE_DEFAULT = [
+    { medio:"Físico (suelo, agua, aire, ruido)", sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" },
+    { medio:"Biótico (flora, fauna)",            sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" },
+    { medio:"Socioeconómico y perceptual",        sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" },
+    { medio:"Total",                              sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" }
+  ];
+
+  // III.7 Compromisos ambientales voluntarios
+  const COMPROMISOS_DEFAULT = [
+    { compromiso:"Señalética ambiental (separación de residuos, ahorro de agua)", responsable:"Gerencia de la estación", plazo:"Construcción", indicador:"Señaléticas instaladas" },
+    { compromiso:"Reforestación con especies nativas en área de amortiguamiento",  responsable:"Promovente",              plazo:"Operación",    indicador:"Número de árboles plantados" },
+    { compromiso:"Eficiencia energética: luminarias LED y temporizadores",          responsable:"Promovente",              plazo:"Operación",    indicador:"Reducción % consumo kWh/año" },
+    { compromiso:"Capacitación en manejo de sustancias peligrosas (NOM-005-STyPS)", responsable:"RRHH / HSE",             plazo:"Anual",        indicador:"Constancias de capacitación" },
+    { compromiso:"Monitoreo semestral de calidad de suelo bajo islotes",            responsable:"Responsable técnico",     plazo:"Operación",    indicador:"Informe de laboratorio" }
+  ];
+
   // -------------------------------------------------------------------
   // 4) BOILERPLATE NACIONAL (texto fijo con variables {{...}})
   // -------------------------------------------------------------------
@@ -316,6 +364,9 @@
     CONSULTORA, SUSTANCIAS, SUS_CONSTRUCCION_DEFAULT, SUS_OPERACION_DEFAULT,
     RESIDUOS_DEFAULT, RUIDO_DEFAULT,
     CLIMA_DEFAULT, SUELO_DEFAULT, HIDRO_DEFAULT, ACUIFERO_DEFAULT, RECEPTORES_DEFAULT,
+    POBLACION_DEFAULT, PIRAMIDE_DEFAULT, OTROS_DEMOG_DEFAULT,
+    IMPACTOS_RESUMEN_DEFAULT, IMPACTOS_BALANCE_DEFAULT,
+    COMPROMISOS_DEFAULT,
     BOILER, REFERENCIAS,
     ESTRATEGIAS_POEGT, DISPOSICIONES, ESTADOS, LISTA_ESTADOS, INSTRUMENTOS,
     CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID, AREAS
