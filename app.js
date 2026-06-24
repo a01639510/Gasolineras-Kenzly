@@ -94,6 +94,8 @@
     if(!Array.isArray(state.tablaImpactosBalance))  state.tablaImpactosBalance=D.IMPACTOS_BALANCE_DEFAULT.map(r=>({...r}));
     // III.7 compromisos
     if(!Array.isArray(state.tablaCompromisos)) state.tablaCompromisos=D.COMPROMISOS_DEFAULT.map(r=>({...r}));
+    // V. Conclusión
+    if(!Array.isArray(state.tablaCompromisosFinales)) state.tablaCompromisosFinales=D.COMPROMISOS_FINALES_DEFAULT.map(r=>({...r}));
     // IV. Abandono
     if(!Array.isArray(state.tablaGatillos))         state.tablaGatillos=D.GATILLOS_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaAccionesCierre))   state.tablaAccionesCierre=D.ACCIONES_CIERRE_DEFAULT.map(r=>({...r}));
@@ -469,8 +471,22 @@
         ]}
     ]},
 
-    { id:"V", grp:"V. Conclusión", titulo:"V. Conclusión", desc:"Texto fijo (no requiere modificación salvo indicación de ASEA).", fields:[
-      {id:"incluirConclusion", l:"Incluir conclusión estándar", tipo:"check", b:"boiler", def:true}
+    { id:"V", grp:"V. Conclusión", titulo:"V. Conclusión", desc:"Síntesis integrada del IP en 9 subsecciones: carácter del instrumento, proyecto, marco jurídico, diagnóstico, impactos, medidas, viabilidad, compromisos y declaratoria.", fields:[
+      {id:"iaConclusion", l:"Conclusión — síntesis personalizada con IA", tipo:"ia", seccion:"conclusion", b:"abierta",
+        nota:"La IA genera los párrafos de síntesis del IP (V.2 proyecto, V.4 diagnóstico, V.5 impactos). Las subsecciones V.1 y V.3 son boilerplate; V.7–V.9 se toman del formulario. Editable."},
+      {id:"vViabilidad", l:"V.7 Declaración de viabilidad ambiental", tipo:"text", b:"cerrada",
+        def:"El proyecto es ambientalmente viable con la implementación de las medidas de prevención y mitigación propuestas en la Sección III.6 y las condiciones adicionales de sustentabilidad de la Sección III.7 del presente Informe Preventivo."},
+      {id:"vNotaConclusion", l:"Nota o condición especial del responsable técnico (opcional)", tipo:"text", b:"cerrada",
+        hint:"Ej: 'El proyecto requiere actualización del IP si se modifica la capacidad de almacenamiento'"},
+      {id:"tablaCompromisosFinales", l:"V.8 Compromisos del promovente ante la ASEA", tipo:"susDinamica", b:"cerrada",
+        nota:"7 compromisos clave pre-llenados. Edita o agrega según las condiciones específicas del resolutivo esperado.",
+        cols:[
+          {k:"num",        l:"No.", w:36},
+          {k:"compromiso", l:"Compromiso del promovente",      w:290},
+          {k:"etapa",      l:"Etapa",                          w:120},
+          {k:"normativa",  l:"NOM / instrumento de respaldo",  w:210}
+        ]},
+      {id:"incluirConclusion", l:"Incluir sección V completa en el documento", tipo:"check", b:"boiler", def:true}
     ]},
 
     { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:'Plano general y figuras adicionales (anexo fotográfico). Usa "+ Agregar imagen".', fields:[] }

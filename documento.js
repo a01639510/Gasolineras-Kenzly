@@ -602,10 +602,84 @@
 
     } // fin if incluirAbandono
 
+    // ========================================================================
+    // V. Conclusión — 9 subsecciones
+    // ========================================================================
     H(1, "V. Conclusión");
-    I("Esta sección reafirma que el proyecto se encuentra en el supuesto para IP. No requiere modificación salvo que la ASEA lo indique.");
-    if (state.incluirConclusion !== false) P(D.BOILER.conclusion);
-    B.push({ t:"firma", promovente: g("repLegal","__________"), tecnico: g("cNombre","__________") });
+    if (state.incluirConclusion !== false) {
+
+      H(3, "V.1 Carácter del instrumento evaluatorio");
+      interp(D.BOILER.conclusion_caracter, v).split(/\n\n+/).forEach(par=>{ if(par.trim()) P(par.trim()); });
+
+      H(3, "V.2 Síntesis del proyecto");
+      if (!IAP("iaConclusion")) {
+        P(interp(D.BOILER.conclusion_sintesis, {
+          ubicacion: v.ubicacion, empresa: g("empresa","[Empresa promovente]"),
+          repLegal: g("repLegal","[Representante legal]"),
+          superficie: g("superficie","[superficie]"), inversion: g("inversion","[inversión]"),
+          empleosDir: g("empleosDir","[empleos directos]"), empleosInd: g("empleosInd","[empleos indirectos]")
+        }));
+      }
+      TBL({ title:"Tabla V.1. Datos identificativos del proyecto", head:["Dato","Valor"], k:"auto",
+            rows:[
+              ["Nombre del proyecto",           g("proyecto","[Nombre del proyecto]")],
+              ["Promovente / empresa",           g("empresa","[Empresa]")],
+              ["Representante legal",            g("repLegal","[Nombre]")],
+              ["Ubicación",                      v.ubicacion],
+              ["Municipio / Estado",             g("municipio","[municipio]") + " / " + g("estado","[estado]")],
+              ["Superficie del proyecto",        g("superficie","[m²]") + " m²"],
+              ["Inversión estimada",             "$" + g("inversion","[MXN]") + " MXN"],
+              ["Empleos directos / indirectos",  g("empleosDir","—") + " directos / " + g("empleosInd","—") + " indirectos"],
+              ["Duración de operación",          g("durOper","[años]") + " años"],
+              ["Fecha del informe",              g("fecha","[fecha]")]
+            ]});
+
+      H(3, "V.3 Vinculación con el ordenamiento jurídico");
+      P(interp(D.BOILER.conclusion_juridico, { uab: g("uab","[UAB]"), clavePolitica: g("clavePolitica","[clave]"), estado: g("estado","[estado]") }));
+
+      H(3, "V.4 Síntesis del diagnóstico ambiental");
+      P(interp(D.BOILER.conclusion_diagnostico, { municipio: g("municipio","[municipio]"), estado: g("estado","[estado]") }));
+
+      H(3, "V.5 Evaluación de impactos — resumen cuantificado");
+      P(D.BOILER.conclusion_impactos);
+      { var tib2=state.tablaImpactosBalance;
+        var tir2=state.tablaImpactosResumen;
+        var hasBalance=tib2&&tib2.some(r=>r.sig_neg||r.sig_pos||r.balance);
+        var hasResumen=tir2&&tir2.some(r=>r.positivos||r.negativos||r.total);
+        if(hasResumen){
+          TBL({ title:"Tabla V.2. Resumen de impactos por etapa (de Sección III.5)",
+                head:["Etapa","Positivos (+)","Negativos (−)","Total"],
+                k:"auto", rows: tir2.map(r=>[r.etapa||"",r.positivos||"",r.negativos||"",r.total||""]) });
+        }
+        if(hasBalance){
+          TBL({ title:"Tabla V.3. Balance de impactos por medio (de Sección III.5)",
+                head:["Medio","Σ ISIG (−)","Σ ISIG (+)","Balance neto","# Altos","# Medios"],
+                k:"auto", rows: tib2.map(r=>[r.medio||"",r.sig_neg||"",r.sig_pos||"",r.balance||"",r.altos||"",r.medios||""]) });
+        }
+        if(!hasBalance&&!hasResumen){
+          I("Completar tablas de resumen y balance en Sección III.5 para que se reflejen automáticamente aquí.");
+        }
+      }
+
+      H(3, "V.6 Eficacia de las medidas de prevención, mitigación y sustentabilidad");
+      P(D.BOILER.conclusion_medidas);
+
+      H(3, "V.7 Declaración de viabilidad ambiental");
+      P(g("vViabilidad","El proyecto es ambientalmente viable con la implementación de las medidas de prevención y mitigación propuestas en la Sección III.6 y las condiciones adicionales de sustentabilidad de la Sección III.7 del presente Informe Preventivo."));
+      { var nota=g("vNotaConclusion",""); if(nota.trim()) P("Nota del responsable técnico: " + nota); }
+
+      H(3, "V.8 Compromisos del promovente ante la ASEA");
+      P("El promovente " + g("empresa","[empresa]") + ", a través de su representante legal " + g("repLegal","[nombre]") + ", se compromete a cumplir las obligaciones siguientes como condición de operación del proyecto:");
+      { var tcf=state.tablaCompromisosFinales;
+        TBL({ title:"Tabla V.4. Compromisos ambientales del promovente ante la ASEA",
+              head:["No.","Compromiso del promovente","Etapa","NOM / instrumento de respaldo"],
+              k:(tcf&&tcf.some(r=>r.compromiso))?"auto":"scaffold",
+              rows:(tcf&&tcf.length)?tcf.map(r=>[r.num||"",r.compromiso||"",r.etapa||"",r.normativa||""]):empty(7,4) }); }
+
+      H(3, "V.9 Declaratoria del responsable técnico");
+      interp(D.BOILER.conclusion_declaratoria, v).split(/\n\n+/).forEach(par=>{ if(par.trim()) P(par.trim()); });
+    }
+    B.push({ t:"firma", promovente: g("repLegal","__________"), tecnico: g("cNombre","__________"), cedula: g("cCedula","__________"), profesion: g("cProfesion","__________") });
 
     H(1, "VI. Planos y cartografía");
     I("Anexar planos y cartografía: localización a 4 niveles, plano arquitectónico, mapas temáticos (clima, geología, edafología, hidrología, NDVI/NDWI, UGA, ANP), área de influencia y matriz de Leopold.");

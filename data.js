@@ -205,6 +205,17 @@
     { autoridad:"Vecindario (opcional pero recomendado)", que:"Comunicado informativo: aviso de cierre, cronograma, contacto de emergencia.", plazo:"15 días previo al inicio de obras de demolición", accion:"Distribución de volante. Reunión comunitaria si hay alta sensibilidad social.", evidencia:"Registro de entrega. Actas de reunión." }
   ];
 
+  // V. Conclusión — compromisos clave del promovente (síntesis para Conclusión)
+  const COMPROMISOS_FINALES_DEFAULT = [
+    { num:"1", compromiso:"Implementar todas las medidas de prevención y mitigación de la Sección III.6 del IP, por etapa y componente ambiental.", etapa:"Todas las etapas", normativa:"LGEEPA Art. 30; NOMs del sector" },
+    { num:"2", compromiso:"Ejecutar y dar seguimiento al Programa de Vigilancia Ambiental (PVA) de III.6.1, con registros disponibles para inspección de ASEA en todo momento.", etapa:"Construcción y operación", normativa:"LGEEPA Art. 30 bis; REIA" },
+    { num:"3", compromiso:"Gestionar todos los residuos peligrosos generados con empresa autorizada por SEMARNAT, mediante manifiestos y certificados de disposición final.", etapa:"Todas las etapas", normativa:"NOM-052-SEMARNAT-2005; LGPGIR" },
+    { num:"4", compromiso:"Mantener el SRV Fase I operativo con eficiencia ≥ 95 %, con dictamen de Unidad de Verificación vigente y registro ante ASEA.", etapa:"Operación", normativa:"NOM-004-ASEA-2017; NOM-016-CRE-2016" },
+    { num:"5", compromiso:"Reportar a ASEA cualquier incidente ambiental (derrame, fuga, incendio) en un plazo máximo de 24 horas de ocurrido, con protocolo de atención inmediata documentado.", etapa:"Operación", normativa:"REIA ASEA; LGEEPA Art. 147 bis" },
+    { num:"6", compromiso:"Ejecutar el Plan de Abandono del Sitio (Sección IV) al activarse cualquiera de los gatillos de cierre, previo aviso formal a ASEA con mínimo 30 días de anticipación.", etapa:"Cierre / abandono", normativa:"REIA ASEA Art. 34; NOM aplicables" },
+    { num:"7", compromiso:"Conservar el expediente del presente IP y todas sus actualizaciones por un mínimo de 10 años, disponible para auditoría o inspección en cualquier momento.", etapa:"Todas las etapas", normativa:"Resolutivo ASEA; LGEEPA Art. 30" }
+  ];
+
   // IV — Cronograma estimado de cierre (3 meses)
   const CRONOGRAMA_CIERRE_DEFAULT = [
     { semana:"Mes 1 — Sem. 1", actividad:"Avisos a autoridades (ASEA, municipio, CONAGUA). Contratación de especialista en desgasificación.", resp:"Promovente / gerencia" },
@@ -250,6 +261,28 @@
 
     conclusion:
 "Este Informe Preventivo se presenta para evaluación de la ASEA, considerando que el proyecto cumple con los criterios establecidos para ser evaluado mediante este instrumento, y no requiere Manifestación de Impacto Ambiental, salvo indicación en contrario por parte de la autoridad.",
+
+    // --- V. CONCLUSIÓN (bloques por subsección) ---
+    conclusion_caracter:
+"El proyecto \"{{proyecto}}\" se encuadra en el supuesto del Artículo 28, fracción X (Sector Energía / Hidrocarburos) de la Ley General del Equilibrio Ecológico y la Protección al Ambiente (LGEEPA), al tratarse de una estación de servicio para la distribución y despacho de combustibles líquidos. Conforme al Artículo 31 del Reglamento en Materia de Evaluación del Impacto Ambiental (REIA) y a las disposiciones sectoriales emitidas por la Agencia de Seguridad, Energía y Ambiente (ASEA), el proyecto se encuentra en supuesto de presentación de Informe Preventivo (IP), y no de Manifestación de Impacto Ambiental (MIA) en modalidad particular o regional, toda vez que se trata de obras y actividades de bajo a moderado impacto ambiental que observan la normatividad sectorial aplicable.\n\nLa presentación del presente Informe Preventivo ante la ASEA tiene por objeto acreditar que el proyecto fue concebido, evaluado y mitigado conforme a los principios de prevención, precaución y sustentabilidad establecidos en la LGEEPA, la Ley de Hidrocarburos y los instrumentos específicos del sector.",
+
+    conclusion_sintesis:
+"El proyecto consiste en la construcción, instalación y operación de una estación de servicio para la distribución de gasolinas y diésel, ubicada en {{ubicacion}}. El promovente es {{empresa}}, con representante legal {{repLegal}}. Las instalaciones principales comprenden tanques de almacenamiento subterráneos, sistema de descarga, líneas y dispensadores, Sistema de Recuperación de Vapores (SRV Fase I), trampa de aceite-agua y servicios al público. La superficie del proyecto es de {{superficie}} m², con una inversión estimada de ${{inversion}} MXN, generando {{empleosDir}} empleos directos y {{empleosInd}} empleos indirectos durante la etapa de operación.",
+
+    conclusion_juridico:
+"El análisis de vinculación de la Sección II acredita que el proyecto se ajusta al marco jurídico ambiental en los niveles federal, estatal y municipal: (i) A nivel del ordenamiento ecológico federal, el predio se ubica en la UAB {{uab}} del Programa de Ordenamiento Ecológico General del Territorio (POEGT), con clave política {{clavePolitica}}, y las 44 estrategias ecológicas se observan mediante las medidas de la Sección III.6. (ii) Las Normas Oficiales Mexicanas del sector (NOM-004-ASEA-2017 para SRV, NOM-016-CRE-2016 para calidad de combustibles, NOM-081-SEMARNAT-1994 para ruido, NOM-052-SEMARNAT-2005 para residuos peligrosos, entre otras) serán aplicadas en las etapas de construcción, operación y cierre. (iii) El Plan Nacional de Desarrollo 2025–2030 y el plan estatal de {{estado}} respaldan el abasto energético eficiente y la sustentabilidad como ejes de política pública congruentes con el proyecto.",
+
+    conclusion_diagnostico:
+"El diagnóstico ambiental del área de influencia (Sección III.4) describe un sistema ambiental ubicado en zona urbana/periurbana del municipio de {{municipio}}, {{estado}}, con predominio de usos de suelo comercial y habitacional, cobertura vegetal escasa o altamente perturbada y ausencia de ecosistemas naturales en el predio y su entorno inmediato. No se identificaron Áreas Naturales Protegidas federales, estatales o municipales, ni sitios RAMSAR, corredores biológicos prioritarios ni hábitat crítico de especies dentro del radio de influencia del proyecto. Las especies de flora y fauna potencialmente presentes en el área corresponden a grupos urbanos adaptados, sin registros de especies en categoría de riesgo conforme a la NOM-059-SEMARNAT-2010 que dependan del predio. El diagnóstico concluye que la situación ambiental preexistente del sitio es compatible con el tipo de proyecto evaluado.",
+
+    conclusion_impactos:
+"La evaluación de impactos (Sección III.5) se realizó mediante la Matriz de Leopold adaptada (acciones × factores ambientales) y la metodología de Gómez-Orea mejorada (criterios M, E, D, R, P, A, S, Imp), con cálculo de índices normalizados de significancia (ISIG 0–100). Los impactos de mayor relevancia se concentran en la etapa de preparación de sitio y construcción —emisiones de ruido, partículas y generación de residuos de construcción—, con naturaleza temporal, extensión local y reversibilidad media-alta. En la etapa de operación, el principal impacto negativo es la generación de COV (vapores de combustibles), controlado por el SRV de Fase I con eficiencia ≥ 95 % (NOM-004-ASEA-2017). Los impactos positivos derivados del proyecto —generación de empleo, abasto energético, activación económica local— superan en magnitud acumulada a los negativos residuales. Ningún impacto califica como \"Muy Alto\" (ISIG >80) con las medidas de mitigación implementadas.",
+
+    conclusion_medidas:
+"Las medidas de prevención, mitigación y compensación propuestas en la Sección III.6, organizadas por etapa y factor ambiental, son técnicamente factibles, normadas y monitoreables. El Programa de Vigilancia Ambiental (PVA) de la Sección III.6.1 establece indicadores verificables, frecuencias e instancias responsables para garantizar su cumplimiento. Los impactos residuales —una vez aplicadas las medidas— se ubican en los rangos \"Bajo\" a \"Medio\" de la escala ISIG, congruentes con la categoría de instrumento evaluatorio presentado (Informe Preventivo). Las condiciones adicionales para la sustentabilidad de la Sección III.7 refuerzan la viabilidad ambiental del proyecto mediante compromisos voluntarios de buenas prácticas.",
+
+    conclusion_declaratoria:
+"El suscrito Responsable Técnico del presente Informe Preventivo, en cumplimiento de lo dispuesto en el Artículo 31 del Reglamento de la LGEEPA en Materia de Evaluación del Impacto Ambiental, declara bajo protesta de decir verdad que: (i) la información contenida en el presente instrumento es verídica y completa; (ii) el proyecto fue diseñado, evaluado y mitigado conforme a la normatividad ambiental sectorial aplicable; (iii) las medidas de prevención, mitigación y las condiciones adicionales propuestas son suficientes para que el proyecto no cause deterioro ambiental severo, irreversible o que supere los umbrales normativos en el área de influencia; y (iv) los compromisos declarados en la Sección V.8 serán cumplidos en los plazos y condiciones señalados.\n\nEl presente Informe Preventivo se somete a la consideración de la Agencia de Seguridad, Energía y Ambiente (ASEA) para su revisión y resolución definitiva, en los términos de los artículos 28 a 35 de la LGEEPA, el REIA y la normatividad específica del sector de hidrocarburos.",
 
     // --- IV. ABANDONO (párrafos plantilla con variables) ---
     abandono_intro:
@@ -452,6 +485,8 @@
     POBLACION_DEFAULT, PIRAMIDE_DEFAULT, OTROS_DEMOG_DEFAULT,
     IMPACTOS_RESUMEN_DEFAULT, IMPACTOS_BALANCE_DEFAULT,
     COMPROMISOS_DEFAULT,
+    // V. Conclusión
+    COMPROMISOS_FINALES_DEFAULT,
     // IV. Abandono
     GATILLOS_DEFAULT, ACCIONES_CIERRE_DEFAULT, RESIDUOS_CIERRE_DEFAULT,
     MUESTREO_SUELO_DEFAULT, RESTITUCION_DEFAULT, CRITERIOS_CIERRE_DEFAULT,
