@@ -510,16 +510,97 @@
             rows:(tco&&tco.length)?tco.map(r=>[r.compromiso||"",r.responsable||"",r.plazo||"",r.indicador||""]):empty(5,4) }); }
 
     // ========================================================================
-    // IV, V, VI (resumen — desarrollo completo en la próxima versión)
+    // IV. Abandono del sitio — desarrollo completo (8 subsecciones)
     // ========================================================================
     H(1, "IV. Abandono del sitio");
     P(interp(D.BOILER.abandono_intro, { ubicacion: v.ubicacion }));
-    if (state.incluirAbandono !== false) {
-      H(3, "IV.1 Gatillos y tipo de cierre");        P(D.BOILER.abandono_iv1);
-      H(3, "IV.3 Procedimientos críticos de seguridad");  P(D.BOILER.abandono_iv3);
-      H(3, "IV.8 Avisos y cierres administrativos");  P(D.BOILER.abandono_iv8);
+    if (!IAP("iaAbandono")) {
+      P("El presente plan de abandono aplica a los " + g("ivComponentes","tanques, líneas, dispensadores, SRV, trampas, drenajes y edificios") + " ubicados en " + g("ubicacion","[ubicación]") + ". La vida útil estimada de las instalaciones es de " + g("ivVidaUtil","25") + " años contados a partir del inicio de operaciones" + (g("ivAnioOperacion","") ? " (año " + g("ivAnioOperacion","") + ")" : "") + ". El uso de suelo posterior al cierre será: " + g("ivUsoPosterior","comercial / mixto") + ".");
     }
-    I("(v1.1) Las secciones IV.2, IV.4–IV.7 con sus tablas se desarrollarán en la siguiente versión.");
+    if (state.incluirAbandono !== false) {
+
+      H(3, "IV.1 Gatillos y tipo de cierre");
+      P("El cierre de la estación de servicio podrá activarse ante cualquiera de los escenarios descritos en la tabla siguiente. El tipo de cierre, su alcance y la ventana temporal de ejecución se definirán en función del gatillo específico, dando prioridad a la seguridad de personas, la integridad de la infraestructura colindante y la protección del suelo y agua subterránea.");
+      { var tg=state.tablaGatillos;
+        TBL({ title:"Tabla IV.1. Gatillos de cierre y tipo de respuesta",
+              head:["Gatillo de cierre","Tipo de cierre","Alcance de actividades","Ventana temporal","Justificación"],
+              k:(tg&&tg.some(r=>r.gatillo))?"auto":"scaffold",
+              rows:(tg&&tg.length)?tg.map(r=>[r.gatillo||"",r.tipo||"",r.alcance||"",r.ventana||"",r.justif||""]):empty(5,5) }); }
+
+      H(3, "IV.2 Acciones de cierre por componente");
+      P("Cada componente de la estación requiere acciones específicas de desinstalación, disposición y control de riesgos. La tabla siguiente detalla el procedimiento, la evidencia requerida y la participación de la Unidad de Verificación (UV) acreditada ante ASEA para cada elemento.");
+      { var tac=state.tablaAccionesCierre;
+        TBL({ title:"Tabla IV.2. Acciones de cierre detalladas por componente",
+              head:["Componente","Acción de cierre","Especificaciones","Evidencia de cumplimiento","UV involucrada","Observaciones"],
+              k:(tac&&tac.some(r=>r.componente))?"auto":"scaffold",
+              rows:(tac&&tac.length)?tac.map(r=>[r.componente||"",r.accion||"",r.especif||"",r.evidencia||"",r.uv||"",r.obs||""]):empty(8,6) }); }
+
+      H(3, "IV.3 Procedimientos críticos de seguridad y control de riesgos");
+      P("Las operaciones de cierre involucran trabajos en atmósferas potencialmente explosivas (hidrocarburos), espacios confinados (tanques) y actividades de corte/soldadura. Los protocolos siguientes son obligatorios y deben ejecutarse en el orden indicado.");
+      H(4, "A. Desgasificación e inercia de tanques (Prioridad 1)");
+      P(D.BOILER.abandono_iv3);
+      P("Procedimiento secuencial: (1) Aislamiento — cerrar todas las válvulas de entrada/salida y colocar etiquetas 'NO OPERAR' (LOTO). (2) Ventilación forzada — abrir tapa lateral del tanque y conectar ventilador de aire forzado por mínimo 15 minutos. (3) Inercia con N₂ — bombear nitrógeno a 5 PSI durante 2–3 días hasta alcanzar O₂ <5 % y LEL <10 %. (4) Monitoreo LEL — medir con detector calibrado cada 4 horas y registrar. (5) Certificación — contratista acreditado ASEA emite certificado de desgasificación. Duración estimada: 5–7 días por tanque. Evidencia: Certificado UV + reportes LEL diarios.");
+      H(4, "B. Sistema LOTO (Lock Out / Tag Out)");
+      P("Antes de cualquier trabajo en tanques o líneas: (1) Cerrar válvulas manuales de todos los flujos. (2) Colocar candado de seguridad en cada válvula (un candado = una persona autorizada). (3) Colocar tarjeta de etiquetado con nombre, fecha y firma. (4) Solo la persona que colocó el candado puede retirarlo. Responsable: Supervisor de sitio + contratista. Evidencia: Fotos de LOTO + firma de aceptación.");
+      H(4, "C. Permisos de trabajo (Hot Work / Espacio Confinado)");
+      P("Para soldadura, corte o entrada a tanques: emitir Permiso de Trabajo Caliente (HOT WORK) y/o Permiso de Espacio Confinado según corresponda. Cada permiso incluye: duración máxima 8 horas, supervisor presente, equipo de protección, testigo externo, e inspección pre-trabajo con detector 4-gas (O₂, LEL, CO, H₂S). Validez: 1 día máximo.");
+      H(4, "D. Equipo de Protección Personal (EPP)");
+      P("EPP mínimo durante todo el proceso de cierre: casco clase C (no conductor), lentes de seguridad, mascarilla N-95 (SCBA si LEL >10 % o entrada a tanque), guantes de nitrilo (resiste combustibles), botas de acero antideslizantes, arnés si trabaja en altura >1.5 m. El contratista es responsable de verificar el EPP de todo su personal.");
+      H(4, "E. Monitoreo continuo de gases");
+      P("Detector 4-gas calibrado diariamente (O₂, LEL, CO, H₂S), operado por personal entrenado, con alarma audible activa durante todas las operaciones de desgasificación y retiro de equipos.");
+
+      H(3, "IV.4 Gestión de residuos y aguas de limpieza durante el cierre");
+      P("El cierre genera residuos de cuatro categorías principales: fondos de tanques (RP presuntos), aguas de enjuague, residuos de construcción y demolición (RCD) y residuos de mantenimiento (RME). Su gestión se realizará conforme a la NOM-052-SEMARNAT-2005, NOM-001-ASEA-2019 y la LGPGIR.");
+      { var trc=state.tablaResiduesCierre;
+        TBL({ title:"Tabla IV.3. Residuos generados durante el cierre — clasificación y gestión",
+              head:["Tipo de residuo","Clasificación / NOM","Volumen estimado","Gestión y control","Gestor autorizado"],
+              k:(trc&&trc.some(r=>r.residuo))?"auto":"scaffold",
+              rows:(trc&&trc.length)?trc.map(r=>[r.residuo||"",r.clas||"",r.vol||"",r.gestion||"",r.gestor||""]):empty(4,5) }); }
+
+      H(3, "IV.5 Muestreo confirmatorio de suelos");
+      P("Una vez retirados todos los equipos e infraestructura soterrada, se realizará un muestreo confirmatorio de suelos para verificar la ausencia de contaminación por hidrocarburos. El muestreo será ejecutado por un ingeniero ambiental y analizado por laboratorio acreditado conforme a NMX-EC-17025-IMNC. Los resultados se compararán contra los criterios de remediación de SEMARNAT para uso industrial/comercial. Si algún punto supera los límites, se procederá a excavación y disposición como RP, o a remediación in situ (biorremedación o solidificación).");
+      { var tms=state.tablaMuestreoSuelo;
+        TBL({ title:"Tabla IV.4. Puntos de muestreo confirmatorio de suelos",
+              head:["Punto","Ubicación / zona","Profundidades","Analitos (método EPA)"],
+              k:(tms&&tms.some(r=>r.punto))?"auto":"scaffold",
+              rows:(tms&&tms.length)?tms.map(r=>[r.punto||"",r.ubicacion||"",r.prof||"",r.analitos||""]):empty(4,4) }); }
+      I("Costo estimado del muestreo: $8,000–15,000 MXN (muestreo + análisis). Duración: 2–3 semanas. Si se detecta contaminación: añadir costo de remediación ($50,000+ MXN).");
+
+      H(3, "IV.6 Restitución y post-cierre");
+      P("Concluidas las actividades de retiro de equipos y gestión de residuos, se procederá a la restitución física del predio a condiciones apropiadas para el uso de suelo posterior definido. Las actividades de restitución incluyen relleno de zanjas, nivelación topográfica, revegetación (si aplica) y señalización de sitio remediado.");
+      { var tre=state.tablaRestitucion;
+        TBL({ title:"Tabla IV.5. Actividades de restitución y post-cierre",
+              head:["Acción","Especificación técnica","Cantidad / alcance","Verificación","Responsable"],
+              k:(tre&&tre.some(r=>r.accion))?"auto":"scaffold",
+              rows:(tre&&tre.length)?tre.map(r=>[r.accion||"",r.especif||"",r.cantidad||"",r.verif||"",r.resp||""]):empty(5,5) }); }
+      P("El sitio se mantendrá bajo monitoreo post-cierre por un periodo mínimo de 5 años tras la liberación, con muestreos anuales de suelo en los puntos M-01 a M-C para confirmar la estabilidad de las condiciones ambientales.");
+
+      H(3, "IV.7 Criterios de finalización (tabla de aceptación)");
+      P("La liberación definitiva del sitio y el cierre administrativo ante ASEA y el municipio estarán condicionados al cumplimiento de los nueve criterios de aceptación siguientes. Todos deben estar cumplidos y con evidencia documental antes de solicitar la resolución de cierre:");
+      { var tcc=state.tablaCriteriosCierre;
+        TBL({ title:"Tabla IV.6. Criterios de aceptación y liberación del sitio",
+              head:["Actividad de cierre","Criterio de aceptación","Evidencia requerida"],
+              k:(tcc&&tcc.some(r=>r.actividad))?"auto":"scaffold",
+              rows:(tcc&&tcc.length)?tcc.map(r=>[r.actividad||"",r.criterio||"",r.evidencia||""]):empty(9,3) }); }
+
+      H(3, "IV.8 Avisos y cierres administrativos");
+      P(D.BOILER.abandono_iv8);
+      { var tav=state.tablaAvisosCierre;
+        TBL({ title:"Tabla IV.7. Programa de avisos y cierres administrativos",
+              head:["Autoridad","Qué se presenta","Plazo","Acción requerida","Evidencia"],
+              k:(tav&&tav.some(r=>r.autoridad))?"auto":"scaffold",
+              rows:(tav&&tav.length)?tav.map(r=>[r.autoridad||"",r.que||"",r.plazo||"",r.accion||"",r.evidencia||""]):empty(5,5) }); }
+
+      H(4, "Cronograma estimado de cierre");
+      P("El cierre ordenado de la estación de servicio requiere un mínimo de 3 meses desde la emisión del primer aviso a autoridades hasta la liberación del sitio. El cronograma siguiente es indicativo; las fechas exactas se determinarán en función del gatillo de cierre activado:");
+      { var tcr=state.tablaCronogramaCierre;
+        TBL({ title:"Tabla IV.8. Cronograma estimado de actividades de cierre",
+              head:["Semana / periodo","Actividad principal","Responsable"],
+              k:(tcr&&tcr.some(r=>r.semana))?"auto":"scaffold",
+              rows:(tcr&&tcr.length)?tcr.map(r=>[r.semana||"",r.actividad||"",r.resp||""]):empty(8,3) }); }
+      I("Presupuesto estimado de cierre: " + g("ivPresupuestoCierre","Por definir") + " MXN. El costo varía significativamente dependiendo de si se detecta contaminación de suelo (agrega $50,000+ por remediación).");
+
+    } // fin if incluirAbandono
 
     H(1, "V. Conclusión");
     I("Esta sección reafirma que el proyecto se encuentra en el supuesto para IP. No requiere modificación salvo que la ASEA lo indique.");

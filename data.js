@@ -132,6 +132,91 @@
     { medio:"Total",                              sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" }
   ];
 
+  // ─── IV. Abandono del sitio ────────────────────────────────────────────────
+
+  // IV.1 Gatillos de cierre
+  const GATILLOS_DEFAULT = [
+    { gatillo:"Fin de vida útil operativa (25 años)", tipo:"Cierre completo permanente", alcance:"Retiro equipos, demolición estructuras, remediación suelo", ventana:"Meses 1–3 post-operación", justif:"Desgaste infraestructura, obsolescencia tecnológica" },
+    { gatillo:"Pérdida de rentabilidad (caída demanda >50 %)", tipo:"Cierre temporal o permanente", alcance:"Retiro tanques, retención estructuras provisional", ventana:"En cualquier momento", justif:"Cambio de mercado energético" },
+    { gatillo:"Daño catastrófico (incendio, explosión)", tipo:"Cierre de emergencia", alcance:"Evacuación, contención inmediata, remediación urgente", ventana:"0–2 semanas post-evento", justif:"Evento mayor de seguridad" },
+    { gatillo:"Orden de autoridad (incumplimiento ASEA/SEMARNAT)", tipo:"Cierre forzoso", alcance:"Cierre completo bajo supervisión regulatoria", ventana:"30 días (típico)", justif:"Sanciones por incumplimiento crónico" },
+    { gatillo:"Cambio de política energética (ej. prohibición combustibles fósiles)", tipo:"Cierre planificado adelantado", alcance:"Retiro gradual de operación, reconversión o cierre ordenado", ventana:"2–3 años previo a fecha legal", justif:"Política pública transición energética" }
+  ];
+
+  // IV.2 Acciones de cierre por componente
+  const ACCIONES_CIERRE_DEFAULT = [
+    { componente:"Tanque T-01 (Gasolina Regular, acero)", accion:"Desgasificación N₂ → Inercia → Retiro mecánico", especif:"Purga vapores 2–3 días. LEL <10 % antes de retiro. Corte líneas. Levante con grúa.", evidencia:"Certificado desgasificación + reportes LEL diarios + fotos + manifiesto", uv:"Sí (UV verifica LEL)", obs:"Fondos: muestreo TCLP si sospecha de contaminación" },
+    { componente:"Tanque T-02 (Gasolina Premium, acero)", accion:"Ídem T-01", especif:"Ídem T-01", evidencia:"Ídem T-01", uv:"Sí", obs:"Ídem" },
+    { componente:"Tanque T-03 (Diésel Automotriz, acero)", accion:"Ídem T-01", especif:"Menos volátil que gasolina — igual procedimiento desgasificación", evidencia:"Ídem T-01", uv:"Sí", obs:"Menor riesgo VOC; mayor riesgo sedimentos RP" },
+    { componente:"Líneas subterráneas (succión, descarga, retorno vapor)", accion:"Purga con aire comprimido → Retiro mecánico", especif:"Purga de gases. Corte en puntos clave. Extracción tubería soterrada (~50–75 m). Disposición acero.", evidencia:"Fotos retiro. Certificado disposición. Plano zanjas rellenas.", uv:"No", obs:"Profundidad 1–1.5 m; relleno con material inerte" },
+    { componente:"Sistema SRV completo (cúpulas, líneas de vapor, absorber)", accion:"Desmontaje → Retiro a sitio autorizado", especif:"Desinstalación SRV, mangueras, cúpulas dispensadores. Disposición si fuera de uso.", evidencia:"Fotos desmontaje. Certificado disposición.", uv:"No", obs:"Reutilización posible si estado lo permite" },
+    { componente:"Dispensadores (surtidores)", accion:"Desmontaje completo", especif:"Corte eléctrico previo. Desmontaje mecánico. Disposición RAEE o reventa.", evidencia:"Fotos. Certificado disposición o carta de venta.", uv:"No", obs:"Verificar residuo hidrocarburo en mangueras antes de retiro" },
+    { componente:"Edificios (oficina, servicios, caseta)", accion:"Demolición completa", especif:"Abatimiento estructuras. Segregación RCD (concreto, acero, mixtos). Acopio ≤2 semanas.", evidencia:"Fotos demolición. Manifiestos RCD. Certificado gestor.", uv:"Ocasional (inspección final)", obs:"RCD ~20–30 m³ estimado" },
+    { componente:"Piso / pavimento (islotes, aceras)", accion:"Demolición total", especif:"Si antecedentes de derrame: excavación selectiva + muestreo suelo. Si limpio: demolición mecánica.", evidencia:"Fotos excavación. Certificado muestreo suelo.", uv:"Sí (si muestreo requerido)", obs:"Criterio: historial de derrames en zona" },
+    { componente:"Drenaje sanitario (fosa séptica)", accion:"Vaciado y disposición → Retiro físico", especif:"Bombeo lodos. Transporte autorizado. Desinstalación PVC. Relleno con material inerte.", evidencia:"Manifiestos lodos. Certificado planta tratamiento. Fotos.", uv:"No (salvo RP detectado)", obs:"Bajo riesgo si fosa fue mantenida regularmente" },
+    { componente:"Área general (suelo bajo tanques y líneas)", accion:"Muestreo confirmatorio → Remediación si aplica", especif:"Grid 4–5 puntos (IV.5). Análisis TPH, BTEX, metales. Si >límites SEMARNAT: excavación RP o remediación in situ.", evidencia:"Reporte laboratorio acreditado NMX-EC-17025. Planos antes-después.", uv:"Sí (si remediación requerida)", obs:"Costo: $0 si limpio / $50 k+ si contaminado" },
+    { componente:"Servicios (energía eléctrica, agua)", accion:"Desconexión formal ante CFE y municipio", especif:"Aviso CFE: corte energía (30 días previo). Aviso municipio: corte agua (10 días previo).", evidencia:"Acuses CFE. Acuses municipio.", uv:"No", obs:"Trámite administrativo previo al inicio de demoliciones" }
+  ];
+
+  // IV.4 Residuos generados durante cierre
+  const RESIDUOS_CIERRE_DEFAULT = [
+    { residuo:"Fondos de tanques (agua emulsionada, sedimentos HC)", clas:"RP presunto — verificar TCLP (NOM-052-SEMARNAT-2005)", vol:"50–200 l/tanque", gestion:"Manifiestos SEMARNAT. Empresa gestora RP autorizada. Disposición en celda confinada.", gestor:"Por definir (empresa RP autorizada)" },
+    { residuo:"Aguas de enjuague y limpieza de tanques/líneas", clas:"Agua residual con HC (RP si contaminada)", vol:"500–1,000 l total", gestion:"Si contaminada: manifiestos + gestor. Si limpia: descarga autorizada drenaje municipal.", gestor:"Por definir" },
+    { residuo:"Residuos de Construcción y Demolición (RCD — concreto, acero, mezcla)", clas:"RCD (no peligroso)", vol:"20–50 m³ estimado", gestion:"Segregación en sitio. Acopio ≤2 semanas. Contrato con gestor RCD municipal.", gestor:"Por definir (gestor RCD autorizado)" },
+    { residuo:"Residuos peligrosos de mantenimiento (filtros, mangueras contaminadas, trapos)", clas:"RME/RP — NOM-001-ASEA-2019 / NOM-052-SEMARNAT-2005", vol:"100–200 kg estimado", gestion:"Almacén temporal <72 h. Manifiestos SEMARNAT. Empresa gestora autorizada.", gestor:"Por definir" }
+  ];
+
+  // IV.5 Puntos de muestreo confirmatorio de suelos
+  const MUESTREO_SUELO_DEFAULT = [
+    { punto:"M-01", ubicacion:"Bajo tanque T-01 (gasolina regular) — zona máximo riesgo", prof:"0–0.5 m + 1–2 m", analitos:"TPH, BTEX (benceno, tolueno, xilenos), Pb, Zn, Ni" },
+    { punto:"M-02", ubicacion:"Bajo tanque T-03 (diésel automotriz)", prof:"0–0.5 m + 1–2 m", analitos:"TPH, BTEX, metales (Pb, Ni, Zn)" },
+    { punto:"M-03", ubicacion:"Bajo área de dispensadores (donde ocurren derrames menores)", prof:"0–0.5 m + 1–2 m", analitos:"TPH, BTEX, VOC (EPA 8015B / 8260C)" },
+    { punto:"M-C", ubicacion:"Punto control (≥50 m fuera del predio — línea base)", prof:"0–0.5 m", analitos:"TPH, BTEX, metales (referencia)" }
+  ];
+
+  // IV.6 Restitución y post-cierre
+  const RESTITUCION_DEFAULT = [
+    { accion:"Relleno de zanjas (tuberías retiradas)", especif:"Material inerte (grava, arena, suelo limpio). Compactación en capas de 20 cm. Prueba Proctor estándar.", cantidad:"~50 m lineal de zanjas, 1.5 m profundidad", verif:"Fotos antes-después. Reporte compactación (densidad ≥90 %)", resp:"Contratista civil" },
+    { accion:"Relleno de excavaciones (tanques)", especif:"Mismo criterio que zanjas. Nivelación hasta cota original.", cantidad:"~100 m³ estimado (3 tanques)", verif:"Plano topográfico antes-después. Fotos.", resp:"Contratista civil" },
+    { accion:"Nivelación general del terreno", especif:"Topografía final conforme al nivel del terreno circundante. Sin depresiones. Drenaje superficial hacia zona baja.", cantidad:"Toda la superficie del predio (~2,500 m²)", verif:"Plano topográfico firmado. Mediciones de cota.", resp:"Topógrafo + contratista" },
+    { accion:"Revegetación con especies nativas (si aplica)", especif:"Plantación de especies nativas conforme al paisaje local. Mínimo 30 árboles + cobertura herbácea. Riego de establecimiento 6 meses.", cantidad:"Área verde ~500 m² (según uso posterior)", verif:"Fotos plantación. Conteo de árboles. Registro de riego.", resp:"Contratista forestal / promovente" },
+    { accion:"Señalización post-cierre", especif:"Placa informativa: 'Sitio remediado. Ex-estación de servicio. Monitoreo post-cierre hasta [año+5].' Con coordenadas para muestreos futuros.", cantidad:"1 placa permanente", verif:"Foto de placa. Croquis de ubicación.", resp:"Gerencia / promovente" }
+  ];
+
+  // IV.7 Criterios de finalización / aceptación
+  const CRITERIOS_CIERRE_DEFAULT = [
+    { actividad:"Desgasificación de tanques", criterio:"Certificado de desgasificación firmado por UV acreditada. LEL <10 % documentado en todos los puntos.", evidencia:"Certificado UV + reportes LEL diarios por tanque" },
+    { actividad:"Retiro de equipos e infraestructura", criterio:"100 % de equipos removidos del sitio. Sitio vacío verificado.", evidencia:"Fotos sitio vacío. Manifiestos de disposición de equipos." },
+    { actividad:"Gestión de RP fondos de tanques", criterio:"Muestreo TCLP completado. Residuos dispuestos conforme a resultado (RP o RME).", evidencia:"Reporte laboratorio acreditado + manifiestos SEMARNAT (si RP)." },
+    { actividad:"Muestreo confirmatorio de suelos", criterio:"Análisis de laboratorio completado. Suelo cumple criterios SEMARNAT para uso industrial/comercial, o sitio remediado.", evidencia:"Reporte laboratorio NMX-EC-17025 + plano de ubicación de muestras." },
+    { actividad:"Gestión de RCD", criterio:"100 % de escombro en disposición final. Contratos y manifiestos emitidos.", evidencia:"Certificado de gestor RCD." },
+    { actividad:"Desconexión de servicios", criterio:"Energía eléctrica, agua y drenaje desconectados formalmente.", evidencia:"Acuses CFE, municipio y CONAGUA (si aplica)." },
+    { actividad:"Restitución del terreno", criterio:"Terreno nivelado, drenaje superficial funcional. Revegetación establecida (si aplica).", evidencia:"Plano topográfico + fotos post-cierre." },
+    { actividad:"Cierre administrativo", criterio:"ASEA notificada conforme Art. 34 REIA. Licencia municipal cancelada.", evidencia:"Acuses ASEA + municipio." },
+    { actividad:"Documentación del expediente de cierre", criterio:"Carpeta de cierre ordenada (digital + físico), disponible para futuras auditorías por 10 años.", evidencia:"Índice de expediente con todos los documentos." }
+  ];
+
+  // IV.8 Avisos y cierres administrativos
+  const AVISOS_CIERRE_DEFAULT = [
+    { autoridad:"ASEA (Dirección de Evaluación Ambiental)", que:"Aviso de cierre conforme Art. 34 REIA. Incluir: expediente, cronograma, plan de muestreo de suelo.", plazo:"30 días antes del inicio de demoliciones", accion:"Envío por mensajería certificada a ASEA. Solicitar acuse / no objeción.", evidencia:"Acuse ASEA (resolución de no objeción o condicionante)" },
+    { autoridad:"Municipio (Desarrollo Urbano + Protección Civil)", que:"Comunicado de cierre. Solicitud de cancelación de licencia de funcionamiento. Permiso de demolición.", plazo:"10 días antes del inicio de demoliciones", accion:"Dirigido a Secretaría de Desarrollo Urbano y Protección Civil municipal.", evidencia:"Acuse de recepción municipal." },
+    { autoridad:"CONAGUA (Dirección Local)", que:"Aviso de cierre si había permiso de descarga o extracción de agua. Notificación de abandono de fuente subterránea (si existía).", plazo:"15 días antes de cierre", accion:"Dirigido a CONAGUA delegación estatal.", evidencia:"Acuse CONAGUA." },
+    { autoridad:"CFE / Comisión de Agua Municipal", que:"Solicitud de corte definitivo de suministro de energía eléctrica y agua potable.", plazo:"30 días previo al inicio de obras", accion:"Trámite ante ventanilla de CFE y comisión de agua. Coordinar fecha de apagado.", evidencia:"Certificados de corte de CFE y municipio." },
+    { autoridad:"Vecindario (opcional pero recomendado)", que:"Comunicado informativo: aviso de cierre, cronograma, contacto de emergencia.", plazo:"15 días previo al inicio de obras de demolición", accion:"Distribución de volante. Reunión comunitaria si hay alta sensibilidad social.", evidencia:"Registro de entrega. Actas de reunión." }
+  ];
+
+  // IV — Cronograma estimado de cierre (3 meses)
+  const CRONOGRAMA_CIERRE_DEFAULT = [
+    { semana:"Mes 1 — Sem. 1", actividad:"Avisos a autoridades (ASEA, municipio, CONAGUA). Contratación de especialista en desgasificación.", resp:"Promovente / gerencia" },
+    { semana:"Mes 1 — Sem. 2", actividad:"Preparación de permisos de trabajo (HOT WORK, Espacio Confinado). LOTO en todos los equipos.", resp:"Supervisor HSE + contratista" },
+    { semana:"Mes 1 — Sems. 3–4", actividad:"Desgasificación N₂ de 3 tanques + SRV. Monitoreo LEL diario. Certificado UV.", resp:"Contratista acreditado ASEA" },
+    { semana:"Mes 2 — Sems. 1–2", actividad:"Retiro de tanques, líneas y dispensadores. Manifiestos de disposición.", resp:"Contratista + empresa RP (si aplica)" },
+    { semana:"Mes 2 — Sems. 3–4", actividad:"Demolición de edificios. Segregación y retiro de RCD. Corte de servicios (CFE, agua).", resp:"Contratista civil" },
+    { semana:"Mes 3 — Sems. 1–2", actividad:"Muestreo confirmatorio de suelos (M-01 a M-C). Envío a laboratorio acreditado NMX-EC-17025.", resp:"Ingeniero ambiental + laboratorio" },
+    { semana:"Mes 3 — Sem. 3", actividad:"Nivelación topográfica, relleno de zanjas, compactación. Revegetación (si aplica).", resp:"Contratista civil + forestal" },
+    { semana:"Mes 3 — Sem. 4", actividad:"Cierre administrativo: cancelación de licencias, presentación de expediente ante ASEA. Liberación del sitio.", resp:"Promovente / gestor técnico" }
+  ];
+
   // III.7 Compromisos ambientales voluntarios
   const COMPROMISOS_DEFAULT = [
     { compromiso:"Señalética ambiental (separación de residuos, ahorro de agua)", responsable:"Gerencia de la estación", plazo:"Construcción", indicador:"Señaléticas instaladas" },
@@ -367,6 +452,10 @@
     POBLACION_DEFAULT, PIRAMIDE_DEFAULT, OTROS_DEMOG_DEFAULT,
     IMPACTOS_RESUMEN_DEFAULT, IMPACTOS_BALANCE_DEFAULT,
     COMPROMISOS_DEFAULT,
+    // IV. Abandono
+    GATILLOS_DEFAULT, ACCIONES_CIERRE_DEFAULT, RESIDUOS_CIERRE_DEFAULT,
+    MUESTREO_SUELO_DEFAULT, RESTITUCION_DEFAULT, CRITERIOS_CIERRE_DEFAULT,
+    AVISOS_CIERRE_DEFAULT, CRONOGRAMA_CIERRE_DEFAULT,
     BOILER, REFERENCIAS,
     ESTRATEGIAS_POEGT, DISPOSICIONES, ESTADOS, LISTA_ESTADOS, INSTRUMENTOS,
     CRITERIOS_UGA_JAL, CRITERIOS_UGA_HID, AREAS

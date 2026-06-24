@@ -94,6 +94,15 @@
     if(!Array.isArray(state.tablaImpactosBalance))  state.tablaImpactosBalance=D.IMPACTOS_BALANCE_DEFAULT.map(r=>({...r}));
     // III.7 compromisos
     if(!Array.isArray(state.tablaCompromisos)) state.tablaCompromisos=D.COMPROMISOS_DEFAULT.map(r=>({...r}));
+    // IV. Abandono
+    if(!Array.isArray(state.tablaGatillos))         state.tablaGatillos=D.GATILLOS_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaAccionesCierre))   state.tablaAccionesCierre=D.ACCIONES_CIERRE_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaResiduesCierre))   state.tablaResiduesCierre=D.RESIDUOS_CIERRE_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaMuestreoSuelo))    state.tablaMuestreoSuelo=D.MUESTREO_SUELO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaRestitucion))      state.tablaRestitucion=D.RESTITUCION_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaCriteriosCierre))  state.tablaCriteriosCierre=D.CRITERIOS_CIERRE_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaAvisosCierre))     state.tablaAvisosCierre=D.AVISOS_CIERRE_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaCronogramaCierre)) state.tablaCronogramaCierre=D.CRONOGRAMA_CIERRE_DEFAULT.map(r=>({...r}));
     D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
   let _liveT=null;
@@ -372,9 +381,92 @@
         ]}
     ]},
 
-    { id:"IV", grp:"IV. Abandono", titulo:"IV. Abandono del sitio", desc:"Párrafos plantilla con variables. Se redactan solos.", fields:[
-      {id:"ivComponentes", l:"Componentes que se intervendrán", tipo:"text", b:"cerrada", def:"tanques, líneas, dispensarios, trampas y drenajes"},
-      {id:"incluirAbandono", l:"Incluir párrafos boilerplate de cierre (IV.1–IV.8)", tipo:"check", b:"boiler", def:true}
+    { id:"IV", grp:"IV. Abandono", titulo:"IV. Abandono del sitio", desc:"Plan de cierre completo (8 subsecciones). Tablas pre-llenadas con valores típicos de gasolinera — edita según el proyecto.", fields:[
+      // Datos generales del cierre
+      {id:"ivVidaUtil",          l:"Vida útil estimada (años)",                       tipo:"text",  b:"cerrada", def:"25"},
+      {id:"ivAnioOperacion",     l:"Año estimado de inicio de operaciones",            tipo:"text",  b:"cerrada", hint:"Ej: 2026"},
+      {id:"ivComponentes",       l:"Componentes a desmantelar",                       tipo:"text",  b:"cerrada", def:"tanques, líneas, dispensadores, SRV, trampas, drenajes y edificios"},
+      {id:"ivUsoPosterior",      l:"Uso de suelo posterior al cierre",                tipo:"text",  b:"cerrada", def:"Comercial / mixto (a definir por propietario)"},
+      {id:"ivPresupuestoCierre", l:"Presupuesto estimado de cierre (MXN)",            tipo:"text",  b:"cerrada", def:"Por definir"},
+      {id:"incluirAbandono",     l:"Incluir sección IV completa en el documento",     tipo:"check", b:"boiler",  def:true},
+      {id:"iaAbandono",          l:"Narrativa IV (IA) — introducción y contexto",     tipo:"ia", seccion:"abandono", b:"abierta",
+        nota:"Genera la introducción de la sección IV (contexto, vida útil, marco legal). Editable."},
+      // IV.1 Gatillos
+      {id:"tablaGatillos", l:"IV.1 Gatillos y tipos de cierre", tipo:"susDinamica", b:"cerrada",
+        nota:"5 escenarios que pueden activar el cierre (fin vida útil, emergencia, orden de autoridad, etc.).",
+        cols:[
+          {k:"gatillo", l:"Gatillo de cierre",         w:200},
+          {k:"tipo",    l:"Tipo de cierre",             w:150},
+          {k:"alcance", l:"Alcance de actividades",     w:230},
+          {k:"ventana", l:"Ventana temporal",           w:140},
+          {k:"justif",  l:"Justificación",              w:180}
+        ]},
+      // IV.2 Acciones por componente
+      {id:"tablaAccionesCierre", l:"IV.2 Acciones de cierre por componente", tipo:"susDinamica", b:"cerrada",
+        nota:"Detalla qué hacer con cada equipo: tanques T-01/T-02/T-03, líneas, SRV, edificios, suelo.",
+        cols:[
+          {k:"componente", l:"Componente",            w:200},
+          {k:"accion",     l:"Acción de cierre",      w:200},
+          {k:"especif",    l:"Especificaciones",       w:220},
+          {k:"evidencia",  l:"Evidencia de cumpl.",    w:200},
+          {k:"uv",         l:"UV involucrada",         w:90},
+          {k:"obs",        l:"Observaciones",          w:160}
+        ]},
+      // IV.4 Residuos generados durante cierre
+      {id:"tablaResiduesCierre", l:"IV.4 Residuos generados durante el cierre", tipo:"susDinamica", b:"cerrada",
+        nota:"RP fondos de tanques, aguas de enjuague, RCD de demolición, RME de mantenimiento.",
+        cols:[
+          {k:"residuo", l:"Tipo de residuo",              w:230},
+          {k:"clas",    l:"Clasificación / NOM",          w:200},
+          {k:"vol",     l:"Volumen estimado",              w:110},
+          {k:"gestion", l:"Gestión y control",            w:230},
+          {k:"gestor",  l:"Gestor autorizado",            w:140}
+        ]},
+      // IV.5 Muestreo de suelos
+      {id:"tablaMuestreoSuelo", l:"IV.5 Puntos de muestreo confirmatorio de suelos", tipo:"susDinamica", b:"cerrada",
+        nota:"4 puntos mínimos: bajo T-01, bajo T-03, bajo dispensadores, punto control fuera del predio.",
+        cols:[
+          {k:"punto",    l:"Punto", w:60},
+          {k:"ubicacion",l:"Ubicación / zona",    w:260},
+          {k:"prof",     l:"Profundidades",        w:130},
+          {k:"analitos", l:"Analitos (TPH, BTEX, metales)", w:230}
+        ]},
+      // IV.6 Restitución
+      {id:"tablaRestitucion", l:"IV.6 Restitución y post-cierre", tipo:"susDinamica", b:"cerrada",
+        nota:"Relleno de zanjas, nivelación, revegetación, señalización de sitio remediado.",
+        cols:[
+          {k:"accion",   l:"Acción",                  w:210},
+          {k:"especif",  l:"Especificación técnica",  w:230},
+          {k:"cantidad", l:"Cantidad / alcance",      w:120},
+          {k:"verif",    l:"Verificación",            w:190},
+          {k:"resp",     l:"Responsable",             w:130}
+        ]},
+      // IV.7 Criterios de finalización
+      {id:"tablaCriteriosCierre", l:"IV.7 Criterios de finalización (aceptación)", tipo:"susDinamica", b:"cerrada",
+        nota:"Checklist de 9 criterios binarios (cumplido/pendiente). ASEA verifica estos antes de liberar el sitio.",
+        cols:[
+          {k:"actividad", l:"Actividad de cierre",        w:220},
+          {k:"criterio",  l:"Criterio de aceptación",     w:260},
+          {k:"evidencia", l:"Evidencia requerida",        w:220}
+        ]},
+      // IV.8 Avisos administrativos
+      {id:"tablaAvisosCierre", l:"IV.8 Avisos y cierres administrativos", tipo:"susDinamica", b:"cerrada",
+        nota:"Notificaciones obligatorias a ASEA (30 días), municipio (10 días), CONAGUA (15 días), CFE/agua (30 días).",
+        cols:[
+          {k:"autoridad", l:"Autoridad",                 w:200},
+          {k:"que",       l:"Qué se presenta",           w:220},
+          {k:"plazo",     l:"Plazo",                     w:120},
+          {k:"accion",    l:"Acción requerida",          w:190},
+          {k:"evidencia", l:"Evidencia",                 w:140}
+        ]},
+      // Cronograma
+      {id:"tablaCronogramaCierre", l:"IV — Cronograma de cierre (estimado 3 meses)", tipo:"susDinamica", b:"cerrada",
+        nota:"Programa semanal de actividades. Ajustar fechas según inicio real del cierre.",
+        cols:[
+          {k:"semana",    l:"Semana / periodo",  w:160},
+          {k:"actividad", l:"Actividad principal", w:330},
+          {k:"resp",      l:"Responsable",        w:140}
+        ]}
     ]},
 
     { id:"V", grp:"V. Conclusión", titulo:"V. Conclusión", desc:"Texto fijo (no requiere modificación salvo indicación de ASEA).", fields:[
