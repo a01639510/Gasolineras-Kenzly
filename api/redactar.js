@@ -126,6 +126,11 @@ const META = {
     "4–5 párrafos de síntesis",
     "Prosa integradora; sintetiza hallazgos; no repite datos detallados; tono declarativo ante ASEA"
   ),
+  diagnostico_ambiental: meta(
+    "resultados de III.4.1–III.4.5: abióticos, bióticos, socioeconómico y receptores",
+    "3–4 párrafos integradores",
+    "Prosa continua; cierra con juicio de sensibilidad global del AI y compatibilidad del sitio"
+  ),
 };
 
 // ── PROMPTS MAESTROS ───────────────────────────────────────────────────────
@@ -262,6 +267,23 @@ const PROMPTS = {
     "calidad del suelo bajo los islotes de despacho para detectar contaminación temprana. " +
     "Concluye señalando que estas medidas refuerzan la viabilidad ambiental del proyecto y " +
     "manifiestan la responsabilidad ambiental del operador más allá del cumplimiento normativo." +
+    extra(d),
+
+  diagnostico_ambiental: (d) =>
+    `${ctx(d)}\n\n` +
+    "Redacta la síntesis del diagnóstico ambiental integral —apartado III.4.6— del Informe Preventivo " +
+    "en tres o cuatro párrafos de prosa continua, integrando los apartados III.4.1 a III.4.5 sin encabezarlos. " +
+    "El primer párrafo describe el estado de conservación del ecosistema en el área de influencia: " +
+    "cobertura vegetal (porcentaje estimado y tipo fisonómico-florístico), fauna silvestre observada, " +
+    "presencia o ausencia de especies protegidas conforme a la NOM-059-SEMARNAT-2010, y el grado de " +
+    "modificación antrópica del entorno. El segundo párrafo describe los riesgos preexistentes en el AI: " +
+    "riesgo de inundación según CONAGUA, estabilidad de laderas y pendientes, condición del acuífero " +
+    "(sobreexplotado o disponible), posible contaminación previa del suelo o subsuelo y conflictos " +
+    "socioambientales documentados. El tercer párrafo evalúa los servicios ambientales del sistema " +
+    "—regulación hídrica, microclima, provisión de hábitat y valor paisajístico— con su nivel de " +
+    "importancia para el AI. El cuarto párrafo concluye la sensibilidad ambiental global del sitio: " +
+    "si el AI es de baja, media o alta sensibilidad, la compatibilidad del uso propuesto con el entorno " +
+    "y la capacidad del proyecto para operar sin superar los umbrales normativos con las medidas propuestas." +
     extra(d),
 
   conclusion: (d) =>

@@ -77,6 +77,11 @@
     { param:"Descripción / características",                  val:"" },
     { param:"Vulnerabilidad a contaminación por HC",          val:"" }
   ];
+  const GEOMORFO_DEFAULT = [
+    { geoforma:"Llanura aluvial / planicie", desc:"Superficie plana; baja pendiente; compactación variable; riesgo de inundación", ai:"" },
+    { geoforma:"Lomerío suave",              desc:"Elevaciones onduladas con pendiente < 15 %; sin riesgo de deslizamiento significativo", ai:"" },
+    { geoforma:"Procesos / riesgos activos", desc:"Inundación / erosión / subsidencia (especificar si aplica o indicar N/A)", ai:"" }
+  ];
   const HIDRO_DEFAULT = [
     { param:"Región Hidrológica",             val:"" },
     { param:"Cuenca hidrológica",             val:"" },
@@ -91,6 +96,21 @@
   const RECEPTORES_DEFAULT = [
     { no:"1", tipo:"", nombre:"", dist:"", dir:"", pob:"", obs:"" },
     { no:"2", tipo:"", nombre:"", dist:"", dir:"", pob:"", obs:"" }
+  ];
+  const RIESGO_RECEPTORES_DEFAULT = [
+    { receptor:"", parametro:"COV / vapores de combustibles (SRV)", nivel:"Bajo-Medio", justif:"" },
+    { receptor:"", parametro:"Ruido operacional (NOM-081)",         nivel:"Bajo",       justif:"" },
+    { receptor:"", parametro:"Derrame accidental de HC",            nivel:"Bajo",       justif:"" }
+  ];
+
+  // III.4.3 Observadas en campo (distintas de las bibliográficas CONABIO)
+  const FLORA_OBSERVADA_DEFAULT = [
+    { nombre_comun:"", nombre_cientifico:"", ubicacion:"", cobertura:"", nom059:"" },
+    { nombre_comun:"", nombre_cientifico:"", ubicacion:"", cobertura:"", nom059:"" }
+  ];
+  const FAUNA_OBSERVADA_DEFAULT = [
+    { grupo:"Ave",      especie:"", comun:"", ubicacion:"", nom059:"Sin estatus", comportamiento:"" },
+    { grupo:"Mamífero", especie:"", comun:"", ubicacion:"", nom059:"Sin estatus", comportamiento:"" }
   ];
 
   // III.4.4 Socioeconómico — fuente INEGI Censo 2020
@@ -481,7 +501,9 @@
   window.IPDATA = {
     CONSULTORA, SUSTANCIAS, SUS_CONSTRUCCION_DEFAULT, SUS_OPERACION_DEFAULT,
     RESIDUOS_DEFAULT, RUIDO_DEFAULT,
-    CLIMA_DEFAULT, SUELO_DEFAULT, HIDRO_DEFAULT, ACUIFERO_DEFAULT, RECEPTORES_DEFAULT,
+    CLIMA_DEFAULT, SUELO_DEFAULT, GEOMORFO_DEFAULT, HIDRO_DEFAULT, ACUIFERO_DEFAULT,
+    RECEPTORES_DEFAULT, RIESGO_RECEPTORES_DEFAULT,
+    FLORA_OBSERVADA_DEFAULT, FAUNA_OBSERVADA_DEFAULT,
     POBLACION_DEFAULT, PIRAMIDE_DEFAULT, OTROS_DEMOG_DEFAULT,
     IMPACTOS_RESUMEN_DEFAULT, IMPACTOS_BALANCE_DEFAULT,
     COMPROMISOS_DEFAULT,

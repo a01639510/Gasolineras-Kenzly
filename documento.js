@@ -372,6 +372,11 @@
     I("Geología y geomorfología: unidades geológicas, pendientes y procesos (inundación, subsidencia); estabilidad del sitio y drenajes.");
     FIGAREA("f17");
     FIGAREA("f18");
+    { var tgm=state.tablaGeomorfo;
+      TBL({ title:"Tabla III.11b. Geología y geomorfología del AI (INEGI — cartas geológica y topográfica)",
+            head:["Geoforma / unidad geológica","Descripción","Presencia en AI (%)"],
+            k:(tgm&&tgm.some(r=>r.geoforma||r.desc))?"auto":"scaffold",
+            rows:(tgm&&tgm.some(r=>r.geoforma||r.desc))?tgm.map(r=>[r.geoforma||"",r.desc||"",r.ai||""]):empty(3,3) }); }
     I("Edafología: tipos de suelo, textura, drenaje y vulnerabilidad a contaminación; profundidad y compactación.");
     FIGAREA("f19");
     { var ts=state.tablaSuelo;
@@ -399,10 +404,20 @@
     FIGAREA("f22");
     FIGAREA("f23");
     var HBIO=["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"];
-    TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI", head:HBIO, k:tK("tablaFlora"), rows: tRows("tablaFlora",HBIO,12) });
-    TBL({ title:"Tabla III.16. Listado de mamíferos potencialmente presentes en el AI", head:HBIO, k:tK("tablaMamiferos"), rows: tRows("tablaMamiferos",HBIO,8) });
-    TBL({ title:"Tabla III.17. Listado de avifauna potencialmente presente en el AI", head:HBIO, k:tK("tablaAvifauna"), rows: tRows("tablaAvifauna",HBIO,10) });
-    TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI", head:HBIO, k:tK("tablaHerpeto"), rows: tRows("tablaHerpeto",HBIO,8) });
+    TBL({ title:"Tabla III.15. Listado de flora potencialmente presente en el AI (bibliográfico — CONABIO/Enciclovida)", head:HBIO, k:tK("tablaFlora"), rows: tRows("tablaFlora",HBIO,12) });
+    { var tfo=state.tablaFloraObservada;
+      TBL({ title:"Tabla III.15b. Flora observada en campo en el predio y colindancias del AI",
+            head:["Nombre común","Nombre científico","Ubicación en predio","Cobertura (%)","Estatus NOM-059"],
+            k:(tfo&&tfo.some(r=>r.nombre_comun||r.nombre_cientifico))?"auto":"scaffold",
+            rows:(tfo&&tfo.some(r=>r.nombre_comun||r.nombre_cientifico))?tfo.map(r=>[r.nombre_comun||"",r.nombre_cientifico||"",r.ubicacion||"",r.cobertura||"",r.nom059||""]):empty(3,5) }); }
+    TBL({ title:"Tabla III.16. Listado de mamíferos potencialmente presentes en el AI (bibliográfico — SNIB/Enciclovida)", head:HBIO, k:tK("tablaMamiferos"), rows: tRows("tablaMamiferos",HBIO,8) });
+    TBL({ title:"Tabla III.17. Listado de avifauna potencialmente presente en el AI (bibliográfico — SNIB/Enciclovida)", head:HBIO, k:tK("tablaAvifauna"), rows: tRows("tablaAvifauna",HBIO,10) });
+    TBL({ title:"Tabla III.18. Listado de anfibios y reptiles potencialmente presentes en el AI (bibliográfico — SNIB/Enciclovida)", head:HBIO, k:tK("tablaHerpeto"), rows: tRows("tablaHerpeto",HBIO,8) });
+    { var tva=state.tablaFaunaObservada;
+      TBL({ title:"Tabla III.18b. Fauna observada en campo en el predio y colindancias del AI (todos los grupos)",
+            head:["Grupo","Nombre científico","Nombre común","Ubicación / zona","Estatus NOM-059","Comportamiento / evidencia"],
+            k:(tva&&tva.some(r=>r.especie||r.comun))?"auto":"scaffold",
+            rows:(tva&&tva.some(r=>r.especie||r.comun))?tva.map(r=>[r.grupo||"",r.especie||"",r.comun||"",r.ubicacion||"",r.nom059||"",r.comportamiento||""]):empty(4,6) }); }
     FIGAREA("f24");
     H(4, "III.4.4 Medio socioeconómico y cultural");
     I("Fuente: INEGI — Censos de Población y Vivienda 2010, 2015 y 2020; ENOE; CONEVAL (rezago social). Pueblos originarios: CDI/INPI. Patrimonio: INAH, CONABIO, CONANP.");
@@ -421,6 +436,12 @@
             head:["Indicador","Valor"],
             k:(tod&&tod.some(r=>r.valor))?"auto":"scaffold",
             rows:(tod&&tod.some(r=>r.valor))?tod.map(r=>[r.indicador||"",r.valor||""]):tod.map(r=>[r.indicador||"",""]) }); }
+    H(5, "Pueblos originarios y población indígena");
+    P(g("pueblosOriginarios","[Especificar presencia o ausencia de pueblos originarios en el municipio — fuente: INPI]"));
+    H(5, "Núcleos agrarios");
+    P(g("nucleosAgrarios","[Especificar ejidos o comunidades agrarias dentro del AI — fuente: Registro Agrario Nacional]"));
+    H(5, "Patrimonio cultural e histórico");
+    P(g("patrimonioINAH","[Especificar presencia o ausencia de zonas arqueológicas federales o monumentos históricos — fuente: INAH]"));
     FIGAREA("f25");
     H(4, "III.4.5 Análisis de cercanía (radio del AI, máx. 2.0 km)");
     I("Funcionalidad y servicios ecosistémicos; consideraciones normativas de distancias y compatibilidad; receptores sensibles dentro del radio; evaluación de riesgo y sensibilidad.");
@@ -430,7 +451,13 @@
             head:["No.","Tipo de receptor","Nombre / descripción","Distancia (m)","Dirección","Capacidad / Pob.","Observaciones / riesgo"],
             k:(tr&&tr.some(r=>r.tipo||r.nombre))?"auto":"scaffold",
             rows:(tr&&tr.some(r=>r.tipo||r.nombre))?tr.map(r=>[r.no||"",r.tipo||"",r.nombre||"",r.dist||"",r.dir||"",r.pob||"",r.obs||""]):empty(3,7) }); }
+    { var trr=state.tablaRiesgoReceptores;
+      TBL({ title:"Tabla III.22b. Evaluación de riesgo por receptor y parámetro ambiental",
+            head:["Receptor sensible","Parámetro","Nivel de riesgo","Justificación"],
+            k:(trr&&trr.some(r=>r.receptor||r.nivel))?"auto":"scaffold",
+            rows:(trr&&trr.length)?trr.map(r=>[r.receptor||"",r.parametro||"",r.nivel||"",r.justif||""]):empty(3,4) }); }
     H(4, "III.4.6 Diagnóstico ambiental");
+    IAP("iaDiagnosticoAmbiental");
     I("Integrar lo anterior para concluir el estado de conservación/deterioro del AI y riesgos preexistentes; interacciones del sistema ambiental, subsistemas y Modelo Ecológico Conceptual (MEC).");
     FIGAREA("f27");
     if (state.incluirMEC !== false) {

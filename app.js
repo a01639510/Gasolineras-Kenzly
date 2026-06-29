@@ -80,11 +80,15 @@
     if(!Array.isArray(state.tablaResiduos))    state.tablaResiduos=D.RESIDUOS_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaRuido))       state.tablaRuido=D.RUIDO_DEFAULT.map(r=>({...r}));
     // III.4
-    if(!Array.isArray(state.tablaClima))       state.tablaClima=D.CLIMA_DEFAULT.map(r=>({...r}));
-    if(!Array.isArray(state.tablaSuelo))       state.tablaSuelo=D.SUELO_DEFAULT.map(r=>({...r}));
-    if(!Array.isArray(state.tablaHidro))       state.tablaHidro=D.HIDRO_DEFAULT.map(r=>({...r}));
-    if(!Array.isArray(state.tablaAcuifero))    state.tablaAcuifero=D.ACUIFERO_DEFAULT.map(r=>({...r}));
-    if(!Array.isArray(state.tablaReceptores))  state.tablaReceptores=D.RECEPTORES_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaClima))              state.tablaClima=D.CLIMA_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaGeomorfo))           state.tablaGeomorfo=D.GEOMORFO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaSuelo))              state.tablaSuelo=D.SUELO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaHidro))              state.tablaHidro=D.HIDRO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaAcuifero))           state.tablaAcuifero=D.ACUIFERO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaReceptores))         state.tablaReceptores=D.RECEPTORES_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaRiesgoReceptores))   state.tablaRiesgoReceptores=D.RIESGO_RECEPTORES_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaFloraObservada))     state.tablaFloraObservada=D.FLORA_OBSERVADA_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaFaunaObservada))     state.tablaFaunaObservada=D.FAUNA_OBSERVADA_DEFAULT.map(r=>({...r}));
     // III.4.4 socioeconómico
     if(!Array.isArray(state.tablaPoblacion))   state.tablaPoblacion=D.POBLACION_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaPiramide))    state.tablaPiramide=D.PIRAMIDE_DEFAULT.map(r=>({...r}));
@@ -279,24 +283,50 @@
       // III.4.2 Abióticos — tablas de parámetro/valor
       {id:"tablaClima", l:"III.4.2a Clima (fuente: SMN / INEGI — Köppen-García)", tipo:"susDinamica", b:"cerrada",
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
-      {id:"tablaSuelo", l:"III.4.2b Edafología (fuente: INEGI — carta edafológica)", tipo:"susDinamica", b:"cerrada",
+      {id:"tablaGeomorfo", l:"III.4.2b Geología y geomorfología (fuente: INEGI — cartas geológica y topográfica)", tipo:"susDinamica", b:"cerrada",
+        nota:"Identifica las geoformas presentes, su descripción y el porcentaje de presencia en el AI.",
+        cols:[
+          {k:"geoforma",l:"Geoforma / unidad geológica", w:200},
+          {k:"desc",    l:"Descripción",                 w:250},
+          {k:"ai",      l:"Presencia en AI (%)",         w:110}
+        ]},
+      {id:"tablaSuelo", l:"III.4.2c Edafología (fuente: INEGI — carta edafológica)", tipo:"susDinamica", b:"cerrada",
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
-      {id:"tablaHidro", l:"III.4.2c Hidrología superficial (fuente: CONAGUA / INEGI)", tipo:"susDinamica", b:"cerrada",
+      {id:"tablaHidro", l:"III.4.2d Hidrología superficial (fuente: CONAGUA / INEGI)", tipo:"susDinamica", b:"cerrada",
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
-      {id:"tablaAcuifero", l:"III.4.2d Acuífero (fuente: CONAGUA — DOF disponibilidad)", tipo:"susDinamica", b:"cerrada",
+      {id:"tablaAcuifero", l:"III.4.2e Acuífero (fuente: CONAGUA — DOF disponibilidad)", tipo:"susDinamica", b:"cerrada",
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
-      // III.4.3 Bióticos — IA + tablaIA
+      // III.4.3 Bióticos — IA + tablaIA (bibliográfico) + tablas de campo
       {id:"iaFloraFauna", l:"III.4.3 Flora y fauna — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
         nota:"Genera el diagnóstico biótico (vegetación + fauna NOM-059) con IA. Editable; se inserta en III.4.3."},
-      {id:"tablaBiota", l:"Listados de flora y fauna (Tablas III.15–III.18) — llenar con IA", tipo:"tablaIA", b:"abierta",
-        nota:"Pega listado de especies (o imagen) y la IA llena las 4 tablas SIN límite de filas. Se vuelcan al documento.",
+      {id:"tablaBiota", l:"Listados bibliográficos (Tablas III.15–III.18) — llenar con IA", tipo:"tablaIA", b:"abierta",
+        nota:"Pega listado de especies de CONABIO/Enciclovida (o imagen) y la IA llena las 4 tablas bibliográficas SIN límite de filas.",
         tablas:[
-          {key:"tablaFlora",     titulo:"Flora",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaMamiferos", titulo:"Mamíferos",           columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaAvifauna",  titulo:"Avifauna",            columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaHerpeto",   titulo:"Anfibios y reptiles", columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
+          {key:"tablaFlora",     titulo:"Flora (bibliográfica — CONABIO/Enciclovida)",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaMamiferos", titulo:"Mamíferos (bibliográfico — SNIB/Enciclovida)",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaAvifauna",  titulo:"Avifauna (bibliográfica — SNIB/Enciclovida)",                columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaHerpeto",   titulo:"Anfibios y reptiles (bibliográfico — SNIB/Enciclovida)",     columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
         ]},
-      // III.4.4 Medio socioeconómico — datos INEGI Censo
+      {id:"tablaFloraObservada", l:"III.4.3 Flora observada en campo (registro directo en predio)", tipo:"susDinamica", b:"cerrada",
+        nota:"Especies efectivamente observadas en predio y colindancias. Complementa el listado bibliográfico.",
+        cols:[
+          {k:"nombre_comun",      l:"Nombre común",       w:150},
+          {k:"nombre_cientifico", l:"Nombre científico",  w:180},
+          {k:"ubicacion",         l:"Ubicación en predio",w:160},
+          {k:"cobertura",         l:"Cobertura (%)",       w:90},
+          {k:"nom059",            l:"Estatus NOM-059",     w:130}
+        ]},
+      {id:"tablaFaunaObservada", l:"III.4.3 Fauna observada en campo (todos los grupos)", tipo:"susDinamica", b:"cerrada",
+        nota:"Fauna efectivamente observada en el predio y colindancias (mamíferos, aves, herpeto — en una sola tabla de campo).",
+        cols:[
+          {k:"grupo",         l:"Grupo",                    w:100},
+          {k:"especie",       l:"Nombre científico",         w:170},
+          {k:"comun",         l:"Nombre común",              w:140},
+          {k:"ubicacion",     l:"Ubicación / zona",          w:150},
+          {k:"nom059",        l:"Estatus NOM-059",           w:120},
+          {k:"comportamiento",l:"Comportamiento / evidencia",w:160}
+        ]},
+      // III.4.4 Medio socioeconómico — datos INEGI Censo + campos culturales
       {id:"tablaPoblacion", l:"III.4.4a Población municipal (Censo INEGI — últimos 3 años)", tipo:"susDinamica", b:"cerrada",
         nota:"Fuente: INEGI — Censos de Población y Vivienda (2020) y ENOE. Llenar con datos del municipio del proyecto.",
         cols:[
@@ -319,6 +349,12 @@
           {k:"indicador", l:"Indicador",  w:300},
           {k:"valor",     l:"Valor",      w:200}
         ]},
+      {id:"pueblosOriginarios", l:"III.4.4d Pueblos originarios / Población indígena", tipo:"text", b:"cerrada",
+        hint:"Ej: 'No se identificaron pueblos indígenas en el municipio (fuente: INPI 2020)'"},
+      {id:"nucleosAgrarios", l:"III.4.4e Núcleos agrarios dentro del AI (≤ 2 km)", tipo:"text", b:"cerrada",
+        hint:"Ej: 'No se identificaron ejidos o comunidades agrarias dentro del AI (fuente: RAN)'"},
+      {id:"patrimonioINAH", l:"III.4.4f Patrimonio cultural y arqueología (fuente: INAH)", tipo:"text", b:"cerrada",
+        hint:"Ej: 'No existen zonas arqueológicas federales dentro del AI (fuente: INAH, consulta 2025)'"},
       // III.4.5 Receptores sensibles (radio ≤ 2 km)
       {id:"tablaReceptores", l:"III.4.5 Receptores sensibles dentro del AI (radio ≤ 2 km)", tipo:"susDinamica", b:"cerrada",
         nota:"Llenar desde trabajo de campo o Google Maps: escuelas, viviendas, hospitales, etc. dentro de 2 km del predio.",
@@ -330,7 +366,18 @@
           {k:"dir",    l:"Dirección",              w:80},
           {k:"pob",    l:"Capacidad / Pob.",       w:100},
           {k:"obs",    l:"Observaciones / riesgo", w:180}
-        ]}
+        ]},
+      {id:"tablaRiesgoReceptores", l:"III.4.5 Evaluación de riesgo por receptor y parámetro", tipo:"susDinamica", b:"cerrada",
+        nota:"Califica el nivel de riesgo (Bajo / Bajo-Medio / Medio / Alto) de cada receptor por parámetro ambiental.",
+        cols:[
+          {k:"receptor",  l:"Receptor sensible",           w:180},
+          {k:"parametro", l:"Parámetro (COV/ruido/HC/etc)",w:170},
+          {k:"nivel",     l:"Nivel de riesgo",             w:120},
+          {k:"justif",    l:"Justificación",               w:220}
+        ]},
+      // III.4.6 Diagnóstico ambiental integral — síntesis IA
+      {id:"iaDiagnosticoAmbiental", l:"III.4.6 Diagnóstico ambiental integral — síntesis con IA", tipo:"ia", seccion:"diagnostico_ambiental", b:"abierta",
+        nota:"La IA genera la síntesis del diagnóstico (estado de conservación, riesgos preexistentes, servicios ambientales, compatibilidad del sitio). Editable."}
     ]},
 
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"Metodología Leopold + Gómez-Orea incluida automáticamente. Llena tablas de resumen/balance tras construir la matriz.", fields:[
