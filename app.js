@@ -93,9 +93,11 @@
     if(!Array.isArray(state.tablaPoblacion))   state.tablaPoblacion=D.POBLACION_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaPiramide))    state.tablaPiramide=D.PIRAMIDE_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaOtrosDemog))  state.tablaOtrosDemog=D.OTROS_DEMOG_DEFAULT.map(r=>({...r}));
-    // III.5 resumen/balance
-    if(!Array.isArray(state.tablaImpactosResumen))  state.tablaImpactosResumen=D.IMPACTOS_RESUMEN_DEFAULT.map(r=>({...r}));
-    if(!Array.isArray(state.tablaImpactosBalance))  state.tablaImpactosBalance=D.IMPACTOS_BALANCE_DEFAULT.map(r=>({...r}));
+    // III.5 acciones, resumen, impactos significativos, balance
+    if(!Array.isArray(state.tablaAccionesProyecto))       state.tablaAccionesProyecto=D.ACCIONES_PROYECTO_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaImpactosResumen))        state.tablaImpactosResumen=D.IMPACTOS_RESUMEN_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaImpactosSignificativos)) state.tablaImpactosSignificativos=D.IMPACTOS_SIGNIFICATIVOS_DEFAULT.map(r=>({...r}));
+    if(!Array.isArray(state.tablaImpactosBalance))        state.tablaImpactosBalance=D.IMPACTOS_BALANCE_DEFAULT.map(r=>({...r}));
     // III.7 compromisos
     if(!Array.isArray(state.tablaCompromisos)) state.tablaCompromisos=D.COMPROMISOS_DEFAULT.map(r=>({...r}));
     // V. Conclusión
@@ -382,6 +384,15 @@
 
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"Metodología Leopold + Gómez-Orea incluida automáticamente. Llena tablas de resumen/balance tras construir la matriz.", fields:[
       {id:"incluirMetodo", l:"Incluir metodología y tablas de criterios/escalas (boilerplate)", tipo:"check", b:"boiler", def:true},
+      {id:"tablaAccionesProyecto", l:"III.5.3 Acciones del proyecto (catálogo para la matriz de Leopold)", tipo:"susDinamica", b:"cerrada",
+        nota:"27 acciones por fase (C01–C10 construcción, O01–O10 operación, A01–A07 abandono). Pre-llenadas con valores típicos de gasolinera — edita parámetros y frecuencias según el proyecto.",
+        cols:[
+          {k:"codigo",  l:"Código",                w:70},
+          {k:"etapa",   l:"Etapa",                 w:110},
+          {k:"accion",  l:"Acción",                w:200},
+          {k:"desc",    l:"Descripción",            w:260},
+          {k:"params",  l:"Parámetros / frecuencia",w:200}
+        ]},
       {id:"iaImpactos", l:"III.5.7/5.8 Descripción de impactos y balance — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
         nota:"Genera la narrativa de impactos altos/medios y el balance neto por medio con IA (Leopold/Gómez-Orea). Editable."},
       {id:"tablaImpactosResumen", l:"Tabla III.25 — Resumen de impactos por etapa", tipo:"susDinamica", b:"cerrada",
@@ -391,6 +402,23 @@
           {k:"positivos", l:"Positivos (+)",   w:100},
           {k:"negativos", l:"Negativos (−)",   w:100},
           {k:"total",     l:"Total",           w:80}
+        ]},
+      {id:"tablaImpactosSignificativos", l:"Tabla III.25b — Impactos significativos (ISIG ≥ 40) — evaluación Gómez-Orea", tipo:"susDinamica", b:"cerrada",
+        nota:"Resumen de los impactos con mayor significancia. Derivar de la matriz de resultados (figura f32). Incluye signos: M negativo = impacto adverso.",
+        cols:[
+          {k:"codigo",   l:"Código",        w:70},
+          {k:"accion",   l:"Acción",        w:150},
+          {k:"factor",   l:"Factor",        w:140},
+          {k:"m",        l:"M",             w:40},
+          {k:"e",        l:"E",             w:40},
+          {k:"d",        l:"D",             w:40},
+          {k:"r",        l:"R",             w:40},
+          {k:"p",        l:"P",             w:40},
+          {k:"a",        l:"A",             w:40},
+          {k:"s",        l:"S",             w:40},
+          {k:"isig",     l:"ISIG",          w:55},
+          {k:"semaforo", l:"Semáforo",      w:100},
+          {k:"desc",     l:"Descripción",   w:150}
         ]},
       {id:"tablaImpactosBalance", l:"Tabla III.26 — Balance de impactos por medio", tipo:"susDinamica", b:"cerrada",
         nota:"Sumatoria de ISIG por medio ambiental. Derivar de la matriz de resultados.",

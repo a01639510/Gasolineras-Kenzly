@@ -152,6 +152,47 @@
     { medio:"Total",                              sig_neg:"", sig_pos:"", balance:"", altos:"", medios:"" }
   ];
 
+  // III.5.3 Acciones del proyecto (catálogo para la matriz de Leopold)
+  const ACCIONES_PROYECTO_DEFAULT = [
+    { codigo:"C01", etapa:"Construcción", accion:"Limpieza y desmonte del terreno",          desc:"Retiro de vegetación superficial y nivelación preliminar",                              params:"1–2 semanas; maquinaria pesada; área del predio" },
+    { codigo:"C02", etapa:"Construcción", accion:"Excavación",                               desc:"Remoción de suelo para cimentación y registro de tanques (~50 m³; Prof. 1.5–3 m)",     params:"2 semanas; 50 m³ material" },
+    { codigo:"C03", etapa:"Construcción", accion:"Cimentación",                              desc:"Construcción de zapatas, losa y pilotes de concreto (f'c 200 kg/cm²)",                 params:"2 semanas; concreto y acero de refuerzo" },
+    { codigo:"C04", etapa:"Construcción", accion:"Obra civil (edificios y cubierta)",        desc:"Construcción de oficinas, baños y cubierta de islas de despacho",                      params:"4–6 semanas; albañilería y estructura metálica" },
+    { codigo:"C05", etapa:"Construcción", accion:"Instalación de tanques",                   desc:"Posicionamiento y conexión de 3 tanques de acero de doble pared (T-01, T-02, T-03)",  params:"1 semana; grúa de carga" },
+    { codigo:"C06", etapa:"Construcción", accion:"Tendido de tuberías",                      desc:"Instalación de líneas de succión y descarga soterradas y aéreas (doble pared)",        params:"2 semanas; longitud según P&ID" },
+    { codigo:"C07", etapa:"Construcción", accion:"Instalación del sistema SRV",              desc:"Montaje del sistema de recuperación de vapores Fase I",                                params:"1 semana; eficiencia ≥95 % (NOM-004-ASEA-2017)" },
+    { codigo:"C08", etapa:"Construcción", accion:"Instalación de dispensadores",             desc:"Montaje de dispensadores y conexiones eléctricas/mecánicas",                           params:"1–2 semanas; conexión a líneas de combustible" },
+    { codigo:"C09", etapa:"Construcción", accion:"Pruebas de hermeticidad",                  desc:"Prueba de presión en tanques y líneas previo al llenado inicial",                      params:"1–2 días; conforme NOM-016-ASEA-2017" },
+    { codigo:"C10", etapa:"Construcción", accion:"Limpieza final y retiro de obra",          desc:"Retiro de escombros, materiales sobrantes y señalización de obra",                    params:"1 semana; disposición en sitios autorizados" },
+    { codigo:"O01", etapa:"Operación",    accion:"Descarga del autotanque",                  desc:"Recepción de combustible en tanques de almacenamiento desde autotanque",               params:"1–2 veces/semana; 5,000–8,000 gal/evento; 30 min" },
+    { codigo:"O02", etapa:"Operación",    accion:"Almacenamiento de combustibles",           desc:"Resguardo de gasolina y diésel en tanques T-01, T-02 y T-03",                         params:"Continuo; presión 0 PSI; temperatura 15–35 °C" },
+    { codigo:"O03", etapa:"Operación",    accion:"Despacho de gasolina regular",             desc:"Venta de gasolina regular mediante dispensadores en islas",                            params:"Continuo; ~200 veh/día; 5 L/min" },
+    { codigo:"O04", etapa:"Operación",    accion:"Despacho de gasolina premium / diésel",   desc:"Venta de combustible de mayor octanaje y diésel según demanda",                       params:"Continuo; flujo variable" },
+    { codigo:"O05", etapa:"Operación",    accion:"Operación del SRV (Fase I)",               desc:"Funcionamiento continuo del sistema de recuperación de vapores de combustible",        params:"Continuo; eficiencia ≥95 %; control automático" },
+    { codigo:"O06", etapa:"Operación",    accion:"Consumo de agua / aguas residuales",       desc:"Agua potable para baños e islas; drenaje a alcantarillado con trampa de grasas",      params:"~1–2 m³/día; NOM-002-CONAGUA" },
+    { codigo:"O07", etapa:"Operación",    accion:"Generación de residuos peligrosos",        desc:"Aceites usados, trapos contaminados, filtros y envases vacíos de HC",                  params:"~100 L aceite/año; manifiestos SEMARNAT (NOM-052)" },
+    { codigo:"O08", etapa:"Operación",    accion:"Generación de residuos sólidos urbanos",   desc:"RSU de operación administrativa y limpieza de islas y baños",                         params:"~2 kg/día; servicio municipal de recolección" },
+    { codigo:"O09", etapa:"Operación",    accion:"Mantenimiento preventivo de equipos",      desc:"Cambio de aceite, filtros, calibración de dispensadores y verificación del SRV",      params:"Trimestral/semestral; genera RP temporales" },
+    { codigo:"O10", etapa:"Operación",    accion:"Tráfico vehicular de clientes",            desc:"Flujo de vehículos al predio, circulación en islas y salida a vía pública",           params:"~200 veh/día; 1–2 autotanques/semana" },
+    { codigo:"A01", etapa:"Abandono",     accion:"Desgasificación e inertización de tanques",desc:"Purga de vapores con N₂ previo al retiro mecánico de los tanques",                    params:"2–3 días/tanque; LEL <10 %; certificado UV (ASEA)" },
+    { codigo:"A02", etapa:"Abandono",     accion:"Retiro de tanques",                        desc:"Extracción mecánica de los 3 tanques con grúa y disposición como RP o chatarra",      params:"3 días; levante controlado; grúa >10 ton" },
+    { codigo:"A03", etapa:"Abandono",     accion:"Retiro de tuberías y líneas",              desc:"Extracción de tuberías soterradas y aéreas mediante excavación puntual",              params:"1–2 semanas; disposición en reciclaje de metal" },
+    { codigo:"A04", etapa:"Abandono",     accion:"Desinstalación de dispensadores y SRV",   desc:"Desmontaje eléctrico y mecánico de dispensadores y sistema SRV",                      params:"1 semana; desconexión segura bajo LOTO" },
+    { codigo:"A05", etapa:"Abandono",     accion:"Demolición de estructuras civiles",        desc:"Demolición de edificios, cubierta de islas y losa de concreto",                       params:"2–4 semanas; escombro clasificado como RCD" },
+    { codigo:"A06", etapa:"Abandono",     accion:"Gestión de fondos de tanque (RP)",         desc:"Muestreo TCLP de fondos y disposición final como residuo peligroso",                  params:"1–2 días; gestor autorizado SEMARNAT" },
+    { codigo:"A07", etapa:"Abandono",     accion:"Muestreo confirmatorio de suelo y restitución", desc:"Muestreo post-retiro de equipos + nivelación y revegetación del predio",         params:"3–4 semanas; lab acreditado NMX-EC-17025; EPA 8015" }
+  ];
+
+  // III.5.6 Impactos significativos (ISIG ≥ 40) — tabla resumen Gómez-Orea
+  const IMPACTOS_SIGNIFICATIVOS_DEFAULT = [
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" },
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" },
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" },
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" },
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" },
+    { codigo:"", accion:"", factor:"", m:"", e:"", d:"", r:"", p:"", a:"", s:"", isig:"", semaforo:"", desc:"" }
+  ];
+
   // ─── IV. Abandono del sitio ────────────────────────────────────────────────
 
   // IV.1 Gatillos de cierre
@@ -506,6 +547,7 @@
     FLORA_OBSERVADA_DEFAULT, FAUNA_OBSERVADA_DEFAULT,
     POBLACION_DEFAULT, PIRAMIDE_DEFAULT, OTROS_DEMOG_DEFAULT,
     IMPACTOS_RESUMEN_DEFAULT, IMPACTOS_BALANCE_DEFAULT,
+    ACCIONES_PROYECTO_DEFAULT, IMPACTOS_SIGNIFICATIVOS_DEFAULT,
     COMPROMISOS_DEFAULT,
     // V. Conclusión
     COMPROMISOS_FINALES_DEFAULT,

@@ -483,6 +483,11 @@
     I("Definir fases (preparación/construcción/operación/mantenimiento/abandono), medios ambientales y fuentes (memoria técnica, P&ID/planos, diagnóstico III.4 y MEC, NOM y mediciones). Exponer supuestos operativos (horarios, caudales, throughput).");
     H(4, "III.5.3 Identificación de acciones de impacto");
     I("Enlistar todas las acciones por fase por unidad operativa (descarga del autotanque, despacho, lavado de islas, pruebas de hermeticidad, mantenimiento SRV), con frecuencias y supuestos.");
+    { var tap=state.tablaAccionesProyecto;
+      TBL({ title:"Tabla III.23b. Acciones del proyecto identificadas para la matriz de Leopold (27 acciones)",
+            head:["Código","Etapa","Acción","Descripción","Parámetros / frecuencia"],
+            k:(tap&&tap.some(r=>r.codigo||r.accion))?"auto":"scaffold",
+            rows:(tap&&tap.length)?tap.map(r=>[r.codigo||"",r.etapa||"",r.accion||"",r.desc||"",r.params||""]):empty(10,5) }); }
     H(4, "III.5.4 Identificación de factores y componentes ambientales");
     I("Derivar los factores del diagnóstico (III.4) y del MEC. Señalar receptores sensibles y si existe umbral normativo (LMP/criterio).");
     TBL({ title:"Tabla III.24. Componentes y atributos del entorno",
@@ -498,6 +503,11 @@
     H(4, "III.5.6 Evaluación de criterios e índices");
     I("Construir la matriz de resultados con cálculos de índices (intensidad, básico, complementario, significancia), clase, medida, NOM y evidencia.");
     FIGAREA("f32");
+    { var tis=state.tablaImpactosSignificativos;
+      TBL({ title:"Tabla III.25b. Impactos significativos (ISIG ≥ 40) — evaluación Gómez-Orea adaptada",
+            head:["Código","Acción","Factor ambiental","M","E","D","R","P","A","S","ISIG","Semáforo","Descripción"],
+            k:(tis&&tis.some(r=>r.codigo||r.isig))?"auto":"scaffold",
+            rows:(tis&&tis.length)?tis.map(r=>[r.codigo||"",r.accion||"",r.factor||"",r.m||"",r.e||"",r.d||"",r.r||"",r.p||"",r.a||"",r.s||"",r.isig||"",r.semaforo||"",r.desc||""]):empty(6,13) }); }
     H(4, "III.5.7 Descripción de impactos");
     I("Identificar y describir los impactos más significativos (narrativa técnica de los “altos” y “medios” + medidas) por medio físico, biológico y socioeconómico, incluyendo riesgo tecnológico.");
     H(4, "III.5.8 Balance de impacto");
