@@ -34,14 +34,14 @@
 
   // Valores default para III.2.2 y III.2.3 (el usuario puede editar/agregar filas)
   const SUS_CONSTRUCCION_DEFAULT = [
-    { prod:"Pintura anticorrosiva", vol:"50 l", estado:"Líquido", cretib:"I, T", cas:"7732-18-5",   area:"Tanques, líneas",   prov:"Sherwin-Williams" },
-    { prod:"Soldadura Flux-Core",   vol:"20 kg", estado:"Sólido",  cretib:"I",    cas:"1338-85-2",  area:"Conexiones, bridas", prov:"Lincoln Electric" },
-    { prod:"Diésel (equipos obra)", vol:"200 l", estado:"Líquido", cretib:"I",    cas:"68476-34-6", area:"Maquinaria pesada",  prov:"Pemex" }
+    { prod:"Pintura anticorrosiva", vol:"", estado:"Líquido", cretib:"I, T", cas:"7732-18-5",   area:"Tanques, líneas",    prov:"" },
+    { prod:"Soldadura Flux-Core",   vol:"", estado:"Sólido",  cretib:"I",    cas:"1338-85-2",   area:"Conexiones, bridas", prov:"" },
+    { prod:"Diésel (equipos obra)", vol:"", estado:"Líquido", cretib:"I",    cas:"68476-34-6",  area:"Maquinaria pesada",  prov:"" }
   ];
   const SUS_OPERACION_DEFAULT = [
-    { prod:"Aceite lubricante SAE 20W-50", vol:"20 l/año",   estado:"Líquido", cretib:"T, H", cas:"64742-88-7", area:"Bombas de trasiego",   prov:"Mobil" },
-    { prod:"Solvente limpieza SRV",        vol:"10 l/año",   estado:"Líquido", cretib:"I, T", cas:"71-36-3",   area:"Sistema de vapores",  prov:"Química Mexicana" },
-    { prod:"Diésel para generador backup", vol:"500 l/año",  estado:"Líquido", cretib:"I",    cas:"68476-34-6",area:"Generador de respaldo", prov:"Pemex" }
+    { prod:"Aceite lubricante SAE 20W-50", vol:"", estado:"Líquido", cretib:"T, H", cas:"64742-88-7", area:"Bombas de trasiego",    prov:"" },
+    { prod:"Solvente limpieza SRV",        vol:"", estado:"Líquido", cretib:"I, T", cas:"71-36-3",    area:"Sistema de vapores",   prov:"" },
+    { prod:"Diésel para generador backup", vol:"", estado:"Líquido", cretib:"I",    cas:"68476-34-6", area:"Generador de respaldo", prov:"" }
   ];
 
   // -------------------------------------------------------------------

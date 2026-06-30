@@ -242,8 +242,10 @@
 
     { id:"III2", grp:"III. Aspectos técnicos", titulo:"III.2 Sustancias peligrosas", desc:"CRETIB y CAS pre-cargados. Ajusta ID tanque, capacidad (gal) y proveedor. Agrega filas en III.2.2 y III.2.3 según el proyecto.", fields:[
       {id:"sustancias",       l:"III.2.1 Sustancias en tanques de almacenamiento",       tipo:"sustancias",  b:"cerrada"},
-      {id:"sus_construccion", l:"III.2.2 Sustancias peligrosas en construcción",          tipo:"susDinamica", b:"cerrada"},
-      {id:"sus_operacion",    l:"III.2.3 Sustancias peligrosas en operación y mantenimiento", tipo:"susDinamica", b:"cerrada"}
+      {id:"sus_construccion", l:"III.2.2 Sustancias peligrosas en construcción",             tipo:"susDinamica", b:"cerrada",
+        nota:"Producto y CRETIB son referencia genérica — actualiza Volumen y Proveedor con los datos reales del proyecto. Verifica No. CAS contra la hoja de seguridad (SDS) del proveedor."},
+      {id:"sus_operacion",    l:"III.2.3 Sustancias peligrosas en operación y mantenimiento", tipo:"susDinamica", b:"cerrada",
+        nota:"Producto y CRETIB son referencia genérica — actualiza Volumen y Proveedor con los datos reales del proyecto. Verifica No. CAS contra la hoja de seguridad (SDS) del proveedor."}
     ]},
 
     { id:"III3", grp:"III. Aspectos técnicos", titulo:"III.3 Emisiones, descargas y residuos", desc:"Completa los campos del SRV y aguas residuales. Las tablas de residuos y ruido vienen pre-llenadas; edita y agrega filas según el proyecto.", fields:[
@@ -1252,7 +1254,7 @@
   function wordStyles(){
     return `<style>
       @page{size:A4;margin:2.2cm}
-      body{font-family:"Times New Roman",serif;font-size:11pt;line-height:1.45;color:#000}
+      body{font-family:"Times New Roman",serif;font-size:12pt;line-height:1.45;color:#000}
       h1.cover{font-size:30pt;text-align:center;letter-spacing:8pt;color:#0e3b29;margin-top:60pt}
       .cover-sub{text-align:center;color:#555;font-size:13pt}
       .cover-box{border:2pt solid #0e3b29;padding:18pt;text-align:center;margin:24pt 0}
