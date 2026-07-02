@@ -398,6 +398,60 @@ async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
   return { campos: parsed.campos || parsed };
 }
 
+// ── MODO "PROGRAMA" ────────────────────────────────────────────────────────
+// Extrae los datos de UN programa de ordenamiento ecológico (POEGT, POE
+// Estatal, POEL, PDUM, programa de manejo de ANP, etc.) a partir de su Sheet
+// de intersección SIGEIA. Se puede llamar N veces, una por programa ligado
+// al proyecto (ver campo "programas" en II.2).
+const SYSTEM_PROGRAMA =
+  "Eres un asistente que extrae los datos de un Programa de Ordenamiento Ecológico " +
+  "(POEGT, POE Estatal, POE Regional, POEL, PDUM municipal, programa de manejo de ANP, u otro) " +
+  "desde su hoja de intersección SIGEIA, para vincularlo con un proyecto de Informe Preventivo ASEA. " +
+  "Devuelve ÚNICAMENTE JSON válido. No inventes: si un dato no aparece en la fuente, omítelo.";
+
+async function extraerPrograma({ nombre, sheet_url, datos_crudos, imagen }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) { const csv = await fetchSheetCSV(sheet_url); if (csv) fuente += "\n\n" + csv; }
+  if (!fuente.trim() && !(imagen && imagen.data))
+    throw new Error("Pega el link de Google Sheets, datos o una imagen del programa.");
+
+  const instruccion =
+    `Analiza la hoja de intersección del programa de ordenamiento "${nombre || "(sin nombre)"}" y ` +
+    `devuelve ÚNICAMENTE:\n` +
+    `{ "campos": { "uab": "", "clave_politica": "", "ord_regional": "", "region_eco": "", "region_eco_nombre": "" }, ` +
+    `"incisos": [ { "campo": "nombre del campo/criterio", "valor": "..." }, ... ] }\n\n` +
+    `"campos" son los 5 datos de la Unidad Ambiental Biofísica (UAB) del POEGT — inclúyelos SOLO si ` +
+    `este programa es el POEGT y la hoja los trae; omite el objeto "campos" (déjalo vacío {}) si no aplica.\n` +
+    `"incisos" es la lista de TODOS los demás campos relevantes que encuentres para vincular el proyecto ` +
+    `con este programa (p.ej. clave UGA, política ambiental, uso de suelo predominante, criterios ecológicos ` +
+    `aplicables, región/subregión, etc.) — sin límite de incisos, uno por cada dato relevante encontrado.\n` +
+    `No inventes datos: si no encuentras nada relevante, devuelve "incisos": [].\n\n` +
+    `Fuente:\n${fuente || "(ver imagen adjunta)"}`;
+
+  const content = [];
+  if (imagen && imagen.data)
+    content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
+  content.push({ type: "text", text: instruccion });
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: SYSTEM_PROGRAMA, messages: [{ role: "user", content }] }),
+  });
+  if (!resp.ok) { const d = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`); }
+  const data = await resp.json();
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  let jsonStr = txt;
+  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el programa."); }
+  return { campos: parsed.campos || {}, incisos: Array.isArray(parsed.incisos) ? parsed.incisos : [] };
+}
+
 // ── MODO "TABLA" ──────────────────────────────────────────────────────────
 // Estructura datos pegados o imágenes en filas para las tablaIA del formulario.
 const SYSTEM_TABLA =
@@ -468,6 +522,11 @@ module.exports = async (req, res) => {
       res.status(200).json({ ok: true, ...out });
       return;
     }
+    if (body.accion === "programa") {
+      const out = await extraerPrograma(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
     const out = await redactarSeccion(body.seccion, body.datos);
     res.status(200).json({ ok: true, ...out });
   } catch (err) {
@@ -479,4 +538,5 @@ module.exports = async (req, res) => {
 module.exports.redactarSeccion = redactarSeccion;
 module.exports.estructurarTabla = estructurarTabla;
 module.exports.extraerPerfil = extraerPerfil;
+module.exports.extraerPrograma = extraerPrograma;
 module.exports.limpiarMarkdown = limpiarMarkdown;

@@ -70,6 +70,7 @@
     if(!Array.isArray(state.instrumentos) || state.instrumentos.length!==D.INSTRUMENTOS.length)
       state.instrumentos=D.INSTRUMENTOS.map(i=>({sel:i.sel}));
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
+    if(!Array.isArray(state.programas)) state.programas=[];
     if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
     if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
     if(!state.anexos || typeof state.anexos!=="object") state.anexos={};
@@ -197,11 +198,8 @@
     ]},
 
     { id:"II2", grp:"II. Fundamento jurídico", titulo:"II.2 Ordenamiento ecológico (POEGT)", desc:"Texto nacional fijo + variables de la UAB; y las 44 estrategias con respuesta estándar.", fields:[
-      {id:"uab", l:"UAB número", tipo:"text", b:"cerrada"},
-      {id:"clavePolitica", l:"Clave política", tipo:"text", b:"cerrada"},
-      {id:"ordRegional", l:"Ordenamiento Regional número", tipo:"text", b:"cerrada"},
-      {id:"regionEco", l:"Región Ecológica número", tipo:"text", b:"cerrada"},
-      {id:"regionEcoNombre", l:"Nombre de la Región Ecológica", tipo:"text", b:"cerrada"},
+      {id:"programas", l:"Programas de ordenamiento ecológico vinculados", tipo:"programas", b:"cerrada",
+        nota:"Pega el link de Google Sheets de cada programa (POEGT, POE Estatal, POE Regional, POEL, PDUM municipal, programa de manejo de ANP, ...) — se puede agregar el que haga falta según el proyecto. La IA lee la hoja y extrae los datos; el primer programa que traiga UAB/clave política/etc. alimenta la Tabla II.2 y el texto POEGT."},
       {id:"estrategias", l:"Vinculación con las 44 estrategias del POEGT", tipo:"estrategias", b:"boiler"},
       {id:"tablaUab", l:"Tabla II.3 — Políticas y usos de la UAB (llenar con IA)", tipo:"tablaIA", b:"abierta",
         nota:"Pega los datos de la UAB del POEGT (rectores, coadyuvantes, asociados, política ambiental, área de atención prioritaria, estrategias sectoriales) o adjunta una imagen; la IA llena la Tabla II.3.",
@@ -599,6 +597,9 @@
         total++;
         const arr=state[f.id];
         if(Array.isArray(arr)&&arr.some(r=>Object.values(r).some(v=>String(v||"").trim()))) done++;
+      } else if(f.tipo==="programas"){
+        total++;
+        if(Array.isArray(state.programas)&&state.programas.length) done++;
       }
     });
     if(!total) return "neutral";
@@ -649,6 +650,7 @@
     bindTablaIA();
     bindSusDinamica();
     bindImportar();
+    bindProgramas();
     setupScrollSpy();
     updateProgress();
     programarLive();
@@ -691,6 +693,51 @@
   }
 
   function findField(id){ for(const s of SECTIONS){ for(const f of (s.fields||[])){ if(f.id===id) return f; } } return null; }
+
+  // N Programas de ordenamiento (II.2): "+ Agregar programa" → IA lee el
+  // Sheet/texto/imagen y devuelve los incisos; el primer programa que traiga
+  // los 5 campos de la UAB del POEGT alimenta el texto/tabla existentes
+  // (compatibilidad con el machote), sin límite de programas agregados.
+  const PROG_CAMPOS_MAP = { uab:"uab", clave_politica:"clavePolitica", ord_regional:"ordRegional",
+    region_eco:"regionEco", region_eco_nombre:"regionEcoNombre" };
+  function bindProgramas(){
+    document.querySelectorAll("[data-prog-del]").forEach(btn=>{
+      btn.onclick=()=>{
+        const i=+btn.dataset.progDel;
+        (state.programas||[]).splice(i,1);
+        save(); renderForm();
+      };
+    });
+    const img=document.querySelector("input[type=file][data-prog-img]");
+    if(img) img.onchange=()=>{ const f=img.files[0]; const l=document.querySelector("[data-prog-imgname]"); if(l) l.textContent=f?("📷 "+f.name):""; };
+    const btn=document.querySelector("[data-prog-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const nombre=(document.querySelector("[data-prog-nombre]")||{}).value||"";
+      const url=(document.querySelector("[data-prog-url]")||{}).value||"";
+      const txt=(document.querySelector("[data-prog-txt]")||{}).value||"";
+      const file=img&&img.files[0];
+      const status=document.querySelector("[data-prog-status]");
+      if(!nombre.trim()){ toast("Ponle un nombre al programa (ej. POEGT, POE Estatal)"); return; }
+      if(!url.trim() && !txt.trim() && !file){ toast("Pega el link de Sheets, datos o una imagen"); return; }
+      let imagen=null;
+      if(file){ try{ const u=await fileToDataURL(file); const m=u.match(/^data:(.*?);base64,(.*)$/); if(m) imagen={media_type:m[1],data:m[2]}; }catch(e){} }
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…"; if(status) status.textContent=" Leyendo el programa con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"programa", nombre:nombre.trim(), sheet_url:url.trim(), datos_crudos:txt.trim(), imagen})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const campos=j.campos||{};
+        Object.keys(PROG_CAMPOS_MAP).forEach(k=>{
+          const destId=PROG_CAMPOS_MAP[k]; const v=campos[k];
+          if(v!==undefined && v!==null && String(v).trim()!=="" && !String(state[destId]||"").trim()) state[destId]=v;
+        });
+        if(!state.programas) state.programas=[];
+        state.programas.push({ nombre:nombre.trim(), url:url.trim(), incisos:j.incisos||[] });
+        save(); renderForm();
+        toast("✓ '"+nombre.trim()+"' agregado — "+(j.incisos||[]).length+" incisos encontrados");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer el programa: "+e.message); }
+    };
+  }
 
   // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
   function bindTablaIA(){
@@ -896,6 +943,7 @@
       case "susDinamica": return renderSusDinamica(f);
       case "estrategias": return renderEstrategias(f);
       case "instrumentos": return renderInstrumentos(f);
+      case "programas": return renderProgramas(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
       case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
         `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
@@ -1009,6 +1057,44 @@
       return `<label class="chk"><input type="checkbox" data-instr="${i}" ${sel?'checked':''}> <span><b>${esc(it.nombre)}</b> <span class="hint">(${esc(it.cat)})</span></span></label>`;
     }).join("");
     return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label>${rows}</div>`;
+  }
+
+  // N Programas de ordenamiento ecológico (II.2): desplegable — cada programa
+  // se agrega pegando su link de Sheets; la IA lo lee y muestra los incisos
+  // encontrados. Colapsado por defecto (solo título + link); expandible.
+  function renderProgramas(f){
+    const list = state.programas || [];
+    const note = f.nota ? `<div class="open-note" style="margin-bottom:8px">${esc(f.nota)}</div>` : "";
+    const cards = list.map((p,i)=>{
+      const incisos = (p.incisos||[]).map(x=>
+        `<tr><td style="padding:4px 6px;border:1px solid var(--linea);font-weight:600">${esc(x.campo||"")}</td><td style="padding:4px 6px;border:1px solid var(--linea)">${esc(x.valor||"")}</td></tr>`
+      ).join("") || `<tr><td colspan="2" style="padding:8px;color:var(--gris);font-style:italic;text-align:center">Sin incisos extraídos</td></tr>`;
+      const linkHtml = p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" style="color:var(--verde)">${esc(p.url)}</a>` : "<i>(sin link)</i>";
+      return `<details class="prog-card" style="border:1px solid var(--linea);border-radius:8px;margin-bottom:8px;padding:8px 10px">
+        <summary style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span><b>${esc(p.nombre||"(sin nombre)")}</b> — <span style="font-size:12.5px;color:var(--gris)">${linkHtml}</span></span>
+          <button type="button" class="prog-del" data-prog-del="${i}" title="Eliminar programa" style="border:none;background:transparent;color:#b3261e;cursor:pointer;font-size:15px;padding:2px 6px">×</button>
+        </summary>
+        <div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">${incisos}</table></div>
+      </details>`;
+    }).join("") || `<div style="padding:10px;color:var(--gris);font-size:12.5px;font-style:italic">Sin programas agregados todavía.</div>`;
+
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div data-prog-list>${cards}</div>
+      <div class="prog-add" style="margin-top:8px;padding:10px;border:1px dashed var(--linea);border-radius:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <input data-prog-nombre placeholder="Nombre del programa (ej. POEGT, POE Estatal, POEL Puerto Vallarta)" style="flex:1;min-width:220px">
+          <input data-prog-url placeholder="Link de Google Sheets del programa" style="flex:1;min-width:220px">
+        </div>
+        <textarea data-prog-txt placeholder="(Opcional) O pega aquí los datos del programa…" style="min-height:60px;width:100%"></textarea>
+        <div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+          <label class="imglink" style="cursor:pointer">📷 Adjuntar imagen<input type="file" accept="image/*" data-prog-img hidden></label>
+          <span data-prog-imgname style="font-size:12.5px;color:var(--muted,#888)"></span>
+          <button type="button" class="ia-btn" data-prog-btn style="background:#0e3b29;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">+ Agregar programa</button>
+          <span class="ia-status" data-prog-status style="font-size:13px;color:var(--muted,#888)"></span>
+        </div>
+      </div>
+    </div>`;
   }
 
   // Previews dinámicos de boilerplate

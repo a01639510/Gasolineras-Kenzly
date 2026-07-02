@@ -172,6 +172,18 @@
           head:["Estrategia","Disposición","Cumplimiento de estrategia"], k:"auto",
           rows: D.ESTRATEGIAS_POEGT.map((e,i)=>{ const st=state.estrategias[i]||{d:e.d}; return [ e.n+". "+e.t, st.d, e.txt ]; }) });
 
+    // Programas de ordenamiento adicionales ligados al proyecto (más allá del
+    // POEGT nacional de arriba): uno por cada uno agregado en el desplegable
+    // de II.2 — no hay número fijo, depende de lo que el proyecto tenga.
+    (state.programas || []).forEach((p, i) => {
+      H(4, "II.2.1." + (i + 1) + " " + (p.nombre || "Programa de ordenamiento"));
+      if (p.url) I("Fuente: " + p.url);
+      const rows = (p.incisos || []).map(x => [x.campo || "", x.valor || ""]);
+      TBL({ title: "Tabla II.4." + (i + 1) + ". Vinculación con " + (p.nombre || "el programa"),
+            head: ["Campo", "Valor"], k: rows.length ? "auto" : "scaffold",
+            rows: rows.length ? rows : [["", ""]] });
+    });
+
     H(4, "II.2.2 Plan Nacional de Desarrollo");
     P(D.BOILER.pnd);
 
