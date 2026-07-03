@@ -3,5 +3,8 @@
   "framework": null,
   "buildCommand": "echo \"Sitio estatico: no requiere build\"",
   "installCommand": "echo \"Sin dependencias\"",
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "functions": {
+    "api/redactar.js": { "maxDuration": 60 }
+  }
 }

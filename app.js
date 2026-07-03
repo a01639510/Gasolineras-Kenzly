@@ -790,12 +790,20 @@
           const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"plano", datos, plano, notas_adicionales:notas.trim()})});
           const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
-          if(j.texto) state.iaDescTecnica=j.texto;
+          const hayTexto = !!(j.texto && String(j.texto).trim());
+          if(hayTexto) state.iaDescTecnica=j.texto;
           if(!state.tablas) state.tablas={};
           let nTablas=0;
           Object.keys(j.tablas||{}).forEach(k=>{
             if(Array.isArray(j.tablas[k]) && j.tablas[k].length){ state.tablas[k]=j.tablas[k]; nTablas++; }
           });
+          if(!hayTexto && !nTablas){
+            // La IA respondió sin error pero sin nada aprovechable — no lo confundas con éxito.
+            btn.disabled=false; btn.textContent=prev;
+            if(status) status.textContent=" La IA no encontró contenido interpretable en el plano.";
+            toast("⚠ El plano no arrojó datos — revisa que el PDF tenga texto/cotas legibles (no solo imagen escaneada de baja calidad) e inténtalo de nuevo");
+            return;
+          }
           save(); renderForm();
           toast("✓ Plano interpretado — redacción generada"+(nTablas?` + ${nTablas} tabla(s) llenadas`:"")+" (revísalas en III.1)");
         }catch(e){

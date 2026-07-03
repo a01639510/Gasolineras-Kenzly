@@ -531,6 +531,7 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
   const data = await resp.json();
   const truncado = data.stop_reason === "max_tokens";
   const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  console.log(`[plano] stop_reason=${data.stop_reason} pdf_bytes~=${Math.round((plano.data.length * 3) / 4)} respuesta_chars=${txt.length}`);
   // Quita cercas ```json ... ``` si el modelo las agregó a pesar de la instrucción.
   const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   let jsonStr = sinCercas;
@@ -543,12 +544,16 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     const motivo = truncado
       ? "la respuesta se cortó por límite de longitud (el plano/las tablas eran muy extensos)"
       : `${e.message}`;
+    console.error(`[plano] JSON inválido (${motivo}). Primeros 500 chars de la respuesta:`, txt.slice(0, 500));
     throw new Error(
       `La IA no devolvió JSON válido para el plano (${motivo}). Intenta de nuevo, o con un plano ` +
       `más simple/menos páginas si el problema persiste.`
     );
   }
   const texto = Array.isArray(parsed.texto) ? parsed.texto.join("\n\n") : (parsed.texto || "");
+  if (!texto.trim() && !Object.keys(parsed.tablas || {}).length) {
+    console.warn("[plano] la IA devolvió JSON válido pero vacío — revisa la calidad/legibilidad del PDF adjunto.");
+  }
   return { texto: limpiarMarkdown(texto), tablas: parsed.tablas || {} };
 }
 
