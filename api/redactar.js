@@ -452,6 +452,86 @@ async function extraerPrograma({ nombre, sheet_url, datos_crudos, imagen }) {
   return { campos: parsed.campos || {}, incisos: Array.isArray(parsed.incisos) ? parsed.incisos : [] };
 }
 
+// ── MODO "PLANO" ───────────────────────────────────────────────────────────
+// Lee un plano del proyecto (PDF nativo — Claude soporta PDF directamente,
+// sin convertir a imagen) y en una sola llamada genera la redacción de
+// III.1.2–III.1.7 (Descripción Técnica) y llena las tablas técnicas de
+// III.1.7 (tanques, tuberías, extintores, distancias) con lo que el plano
+// muestre explícitamente.
+const SYSTEM_PLANO =
+  "Eres un ingeniero ambiental senior que interpreta planos técnicos (arquitectónicos, " +
+  "isométricos, P&ID o de distribución) de estaciones de servicio para redactar un Informe " +
+  "Preventivo ASEA. Lee el PDF adjunto con atención a cotas, simbología, tablas de " +
+  "especificaciones y notas del plano. Escribe en español técnico formal. No inventes datos " +
+  "ni cifras que no se puedan leer o inferir razonablemente del plano; si algo no es " +
+  "determinable, usa \"[Dato pendiente: descripción]\" en el texto o cadena vacía \"\" en las " +
+  "tablas. PROHIBIDO TODO MARKDOWN en el texto narrativo (sin #, sin **, sin viñetas, sin " +
+  "encabezados de subsección). Devuelve ÚNICAMENTE JSON válido, sin texto antes ni después.";
+
+const TABLAS_PLANO = [
+  { key: "tablaTanques", titulo: "Tanques sujetos a presión",
+    columnas: ["ID Tanque", "Capacidad (L)", "Producto", "Presión diseño", "Presión operación", "Set PSV", "Año/Serie", "Fabricante", "Dictamen/UV"] },
+  { key: "tablaTuberias", titulo: "Tuberías y conexiones",
+    columnas: ["Fluido / Servicio", "Ø Nominal", "Material", "Tipo de instalación", "Profundidad", "Pendiente", "Prueba / Dictamen", "Observaciones"] },
+  { key: "tablaExtintores", titulo: "Extintores",
+    columnas: ["No.", "Ubicación", "Tipo", "Capacidad", "Evidencia"] },
+  { key: "tablaDistancias", titulo: "Distancias mínimas",
+    columnas: ["Elemento", "Distancia requerida (m)", "Distancia de proyecto (m)", "Cumple"] },
+];
+
+async function interpretarPlano({ datos, plano, notas_adicionales }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!plano || !plano.data) throw new Error("Adjunta el PDF del plano.");
+
+  const d = datos || {};
+  const specTablas = TABLAS_PLANO
+    .map((t) => `- "${t.key}" (${t.titulo}): columnas [${t.columnas.join(", ")}]`)
+    .join("\n");
+  const formaTablas =
+    "{ " +
+    TABLAS_PLANO.map((t) => `"${t.key}": [ { ${t.columnas.map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") +
+    " }";
+
+  const instruccion =
+    `${ctx(d)}\n\n` +
+    "Con base ÚNICAMENTE en el plano adjunto (y los datos del proyecto de arriba), genera dos cosas:\n\n" +
+    "1) \"texto\": la redacción de los apartados III.1.2 a III.1.7 (Descripción Técnica) del " +
+    "Informe Preventivo, en prosa técnica continua de 4 a 6 párrafos, cubriendo en orden: " +
+    "actividades principales del ciclo operativo que se aprecien en el plano; dimensiones y " +
+    "distribución de áreas del predio (léelas de las cotas/leyenda); programa de trabajo por " +
+    "etapas si el plano lo indica (si no, escribe \"[Dato pendiente: programa de trabajo]\"); y " +
+    "detalles técnicos de los equipos mostrados (tanques, líneas, dispensarios, SRV, sistemas de " +
+    "seguridad) con sus identificadores tal como aparecen en el plano (p.ej. T-01, T-02). No uses " +
+    "markdown ni encabezados de subsección.\n\n" +
+    "2) \"tablas\": llena las siguientes tablas SOLO con lo que el plano muestre explícitamente " +
+    "(cotas, tablas de especificaciones, leyendas, notas):\n" + specTablas + "\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"texto\": \"...\", \"tablas\": " + formaTablas + " }\n\n" +
+    "Reglas: no inventes cifras ni marcas que no estén en el plano; usa \"\" en las celdas que no " +
+    "puedas leer; incluye TODAS las filas que el plano muestre, sin límite." +
+    (notas_adicionales ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "");
+
+  const content = [
+    { type: "document", source: { type: "base64", media_type: plano.media_type || "application/pdf", data: plano.data } },
+    { type: "text", text: instruccion },
+  ];
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: SYSTEM_PLANO, messages: [{ role: "user", content }] }),
+  });
+  if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
+  const data = await resp.json();
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  let jsonStr = txt;
+  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el plano."); }
+  return { texto: limpiarMarkdown(parsed.texto || ""), tablas: parsed.tablas || {} };
+}
+
 // ── MODO "TABLA" ──────────────────────────────────────────────────────────
 // Estructura datos pegados o imágenes en filas para las tablaIA del formulario.
 const SYSTEM_TABLA =
@@ -527,6 +607,11 @@ module.exports = async (req, res) => {
       res.status(200).json({ ok: true, ...out });
       return;
     }
+    if (body.accion === "plano") {
+      const out = await interpretarPlano(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
     const out = await redactarSeccion(body.seccion, body.datos);
     res.status(200).json({ ok: true, ...out });
   } catch (err) {
@@ -539,4 +624,5 @@ module.exports.redactarSeccion = redactarSeccion;
 module.exports.estructurarTabla = estructurarTabla;
 module.exports.extraerPerfil = extraerPerfil;
 module.exports.extraerPrograma = extraerPrograma;
+module.exports.interpretarPlano = interpretarPlano;
 module.exports.limpiarMarkdown = limpiarMarkdown;

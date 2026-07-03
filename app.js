@@ -48,6 +48,16 @@
       fr.onerror=()=>rej(fr.error); fr.readAsDataURL(file);
     });
   }
+  // Lee cualquier archivo (usado para el PDF del plano) como data URL, sin
+  // redimensionar/recomprimir — a diferencia de fileToDataURL, que asume imagen.
+  function fileToBase64(file){
+    return new Promise((res,rej)=>{
+      const fr=new FileReader();
+      fr.onload=()=>res(fr.result);
+      fr.onerror=()=>rej(fr.error);
+      fr.readAsDataURL(file);
+    });
+  }
   async function setImagen(id,file){
     if(!file || !file.type.startsWith("image/")){ toast("Selecciona un archivo de imagen"); return; }
     try{ const url=await fileToDataURL(file); imgCache[id]=url; await idbPut(id,url); renderForm(); toast("Imagen cargada ✓"); }
@@ -226,8 +236,10 @@
       {id:"usoSuelo", l:"Uso de suelo del sitio", tipo:"select", opts:["Urbano","Suburbano","Industrial","Agrícola","Erial"], b:"cerrada"},
       {id:"III1abierta", l:"III.1.2–III.1.7 Descripción técnica, dimensiones, programa de trabajo", tipo:"open",
         nota:"Sección ABIERTA: requiere memoria técnica, planos, diagrama de Gantt y detalles de tanques/tuberías/maquinaria. Se conserva la guía ✎ del formato.", b:"abierta"},
+      {id:"planoIA", l:"Interpretar plano del proyecto con IA (III.1.2–III.1.7)", tipo:"plano", b:"abierta",
+        nota:"Sube el plano en PDF (arquitectónico, isométrico o P&ID) — entre mejor la calidad del plano, mejor el resultado. La IA lo lee directamente (no hace falta convertirlo a imagen) y de un jalón genera la redacción de III.1.2–III.1.7 y llena las tablas de tanques, tuberías, extintores y distancias mínimas de III.1.7. Máx. ~30 MB."},
       {id:"iaDescTecnica", l:"Descripción técnica (III.1.2–7) — redacción con IA", tipo:"ia", seccion:"descripcion_tecnica", b:"abierta",
-        nota:"Genera la descripción técnica (actividades, dimensiones, programa, tanques/SRV) con IA. Editable; se inserta en III.1."},
+        nota:"Genera la descripción técnica desde texto (sin plano) — úsalo si no tienes un PDF del plano, o para retocar lo que generó 'Interpretar plano'. Editable; se inserta en III.1."},
       {id:"tablaDetallesTec", l:"Tablas III.1.7 — tanques, tuberías, extintores, distancias (llenar con IA)", tipo:"tablaIA", b:"abierta",
         nota:"Pega la memoria técnica / ficha de equipos (o adjunta una imagen) y la IA llena las tablas de tanques, tuberías, extintores y distancias mínimas, SIN límite de filas.",
         tablas:[
@@ -651,6 +663,7 @@
     bindSusDinamica();
     bindImportar();
     bindProgramas();
+    bindPlano();
     setupScrollSpy();
     updateProgress();
     programarLive();
@@ -737,6 +750,61 @@
         toast("✓ '"+nombre.trim()+"' agregado — "+(j.incisos||[]).length+" incisos encontrados");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer el programa: "+e.message); }
     };
+  }
+
+  const PLANO_MAX_BYTES = 30 * 1024 * 1024;
+  function bindPlano(){
+    document.querySelectorAll("input[type=file][data-plano-file]").forEach(inp=>{
+      inp.onchange=()=>{
+        const f=inp.files[0];
+        const lbl=document.querySelector('[data-plano-filename="'+inp.dataset.planoFile+'"]');
+        if(lbl) lbl.textContent=f?("📄 "+f.name):"";
+      };
+    });
+    document.querySelectorAll("[data-plano-btn]").forEach(btn=>{
+      btn.onclick=async()=>{
+        const fid=btn.dataset.planoBtn;
+        const inp=document.querySelector('input[data-plano-file="'+fid+'"]');
+        const file=inp&&inp.files[0];
+        const notas=(document.querySelector('[data-plano-notas="'+fid+'"]')||{}).value||"";
+        const status=document.querySelector('[data-plano-status="'+fid+'"]');
+        if(!file){ toast("Adjunta el PDF del plano primero"); return; }
+        if(file.type!=="application/pdf"){ toast("El archivo debe ser un PDF"); return; }
+        if(file.size>PLANO_MAX_BYTES){ toast("El PDF pesa más de 30 MB — recórtalo o expórtalo en menor calidad"); return; }
+        let plano=null;
+        try{
+          const u=await fileToBase64(file);
+          const m=u.match(/^data:(.*?);base64,(.*)$/);
+          if(m) plano={media_type:m[1], data:m[2]};
+        }catch(e){}
+        if(!plano){ toast("No se pudo leer el PDF"); return; }
+        const sup=g("superficie","");
+        const datos={
+          nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado",""),
+          ubicacion:[g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+          superficie: sup?(sup+" m²"):"", en_anp:false
+        };
+        btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo plano…";
+        if(status) status.textContent=" La IA está leyendo el plano, puede tardar unos segundos…";
+        try{
+          const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"plano", datos, plano, notas_adicionales:notas.trim()})});
+          const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+          if(j.texto) state.iaDescTecnica=j.texto;
+          if(!state.tablas) state.tablas={};
+          let nTablas=0;
+          Object.keys(j.tablas||{}).forEach(k=>{
+            if(Array.isArray(j.tablas[k]) && j.tablas[k].length){ state.tablas[k]=j.tablas[k]; nTablas++; }
+          });
+          save(); renderForm();
+          toast("✓ Plano interpretado — redacción generada"+(nTablas?` + ${nTablas} tabla(s) llenadas`:"")+" (revísalas en III.1)");
+        }catch(e){
+          if(status) status.textContent=" Error: "+e.message;
+          btn.disabled=false; btn.textContent=prev;
+          toast("Error al interpretar el plano: "+e.message);
+        }
+      };
+    });
   }
 
   // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
@@ -944,6 +1012,7 @@
       case "estrategias": return renderEstrategias(f);
       case "instrumentos": return renderInstrumentos(f);
       case "programas": return renderProgramas(f);
+      case "plano": return renderPlano(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
       case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
         `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
@@ -1093,6 +1162,23 @@
           <button type="button" class="ia-btn" data-prog-btn style="background:#0e3b29;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">+ Agregar programa</button>
           <span class="ia-status" data-prog-status style="font-size:13px;color:var(--muted,#888)"></span>
         </div>
+      </div>
+    </div>`;
+  }
+
+  // Interpretar plano (PDF) con IA → redacción III.1.2–III.1.7 + tablas de
+  // III.1.7 (tanques/tuberías/extintores/distancias) en una sola llamada.
+  function renderPlano(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+        <label class="imglink" style="cursor:pointer">📄 Adjuntar plano (PDF)<input type="file" accept="application/pdf" data-plano-file="${esc(f.id)}" hidden></label>
+        <span data-plano-filename="${esc(f.id)}" style="font-size:12.5px;color:var(--muted,#888)"></span>
+      </div>
+      <textarea data-plano-notas="${esc(f.id)}" placeholder="(Opcional) Notas adicionales para complementar el plano (ej. datos que el plano no trae)…" style="min-height:60px;margin-top:6px"></textarea>
+      <div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+        <button type="button" class="ia-btn" data-plano-btn="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">🏗️ Interpretar plano con IA</button>
+        <span class="ia-status" data-plano-status="${esc(f.id)}" style="font-size:13px;color:var(--muted,#888)"></span>
       </div>
     </div>`;
   }
