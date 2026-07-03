@@ -790,14 +790,21 @@
           const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"plano", datos, plano, notas_adicionales:notas.trim()})});
           const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
-          const hayTexto = !!(j.texto && String(j.texto).trim());
-          if(hayTexto) state.iaDescTecnica=j.texto;
+          // Narrativa por subsección → cada apartado III.1.x recibe su propio texto.
+          const N=j.narrativa||{};
+          const MAP={ general:"iaDescTecnica", actividades:"iaActividades", dimensiones:"iaDimensiones",
+                      caracteristicas:"iaCaracteristicas", detallesTecnicos:"iaDetallesTec" };
+          let nNarr=0;
+          Object.keys(MAP).forEach(k=>{
+            const v=N[k];
+            if(v && String(v).trim()){ state[MAP[k]]=v; nNarr++; }
+          });
           if(!state.tablas) state.tablas={};
           let nTablas=0;
           Object.keys(j.tablas||{}).forEach(k=>{
             if(Array.isArray(j.tablas[k]) && j.tablas[k].length){ state.tablas[k]=j.tablas[k]; nTablas++; }
           });
-          if(!hayTexto && !nTablas){
+          if(!nNarr && !nTablas){
             // La IA respondió sin error pero sin nada aprovechable — no lo confundas con éxito.
             btn.disabled=false; btn.textContent=prev;
             if(status) status.textContent=" La IA no encontró contenido interpretable en el plano.";
@@ -805,7 +812,7 @@
             return;
           }
           save(); renderForm();
-          toast("✓ Plano interpretado — redacción generada"+(nTablas?` + ${nTablas} tabla(s) llenadas`:"")+" (revísalas en III.1)");
+          toast("✓ Plano interpretado — "+nNarr+" apartado(s) redactado(s)"+(nTablas?` + ${nTablas} tabla(s) llenadas`:"")+" (revísalos en III.1)");
         }catch(e){
           if(status) status.textContent=" Error: "+e.message;
           btn.disabled=false; btn.textContent=prev;

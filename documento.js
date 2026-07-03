@@ -247,23 +247,29 @@
     H(4, "III.1.2 Actividades principales");
     I("Detallar principales actividades y acciones del giro (carga, almacenamiento, distribución), conforme al Art. 28 de la LGEEPA y 5 de su REIA.");
     P(actividades(g("III1abierta")));
+    IAP("iaActividades");
 
     H(4, "III.1.3 Dimensiones del proyecto");
     I("Para proyectos puntuales: área del predio (+ plano/croquis), mencionando superficies de afectación permanente y temporal. Describir instalaciones estructurales y civiles (urbanización, edificios/oficinas, techos, instalaciones hidráulicas y sanitarias, estación de vigilancia, zonas de protección, anuncio) e instalaciones industriales y mecánicas (tanques de almacenamiento, equipos clave, islotes de llenado/despachadores, tomas de recepción y suministro, sistema de aire comprimido).");
+    IAP("iaDimensiones");
     FIGAREA("f11");
 
     H(4, "III.1.4 Características del proyecto según su naturaleza");
     I("Mencionar los procesos que se emplearán, las sustancias y el tipo de almacenamiento, condiciones de operación, servicios requeridos (agua, energía, drenaje, residuos: especificar origen y sistemas) y obras provisionales/auxiliares al proyecto.");
+    IAP("iaCaracteristicas");
 
     H(4, "III.1.5 Uso de suelo en el sitio seleccionado");
     P("Uso actual del suelo: " + g("usoSuelo","[industrial / urbano / suburbano / agrícola / erial]") + ". Describir brevemente los usos predominantes en la zona del proyecto y en los predios colindantes.");
 
     H(4, "III.1.6 Programa de trabajo");
-    I("Descripción de las actividades por etapa del proyecto (preparación del sitio, proceso constructivo, operación y mantenimiento, abandono) y cronograma esquemático (diagrama de Gantt).");
-    TBL({ title:"Tabla III.2. Diagrama de Gantt — Actividades por etapa (duración en meses)",
-          head:["Etapa / Actividad"].concat(Array.from({length:24},(_,i)=>String(i+1))), k:"scaffold", rows: gantt(24) });
+    I("Descripción de las actividades por etapa del proyecto (preparación del sitio, proceso constructivo, operación y mantenimiento, abandono), con el periodo y la duración estimada de cada una.");
+    var HPT=["Etapa","Actividad","Periodo estimado","Duración"];
+    TBL({ title:"Tabla III.2. Programa de trabajo — actividades y duración estimada",
+          head:HPT, k:tK("tablaPrograma"),
+          rows: tFilled("tablaPrograma") ? tRows("tablaPrograma",HPT,10) : programaScaffold() });
 
     H(4, "III.1.7 Detalles técnicos");
+    IAP("iaDetallesTec");
 
     H(5, "Condiciones de operación de servicios");
     I("Agua, energía, drenaje y residuos; procesos, presiones y temperatura de operación; diagrama de flujos del sistema.");
@@ -778,27 +784,25 @@
     ["Medio Socioeconómico","Urbano","Infraestructura","Equipamiento / demanda de servicios / riesgo","—"]
   ];
   function empty(n,c){ return Array.from({length:n}, ()=> Array.from({length:c}, ()=> "")); }
-  function gantt(m){
-    m=m||24;
-    const fila=(a)=>[a].concat(Array.from({length:m},()=> ""));
-    const band=(t)=>[t].concat(Array.from({length:m},()=> ""));
+  // Andamiaje de la Tabla III.2 (Programa de trabajo) cuando NO se ha llenado con
+  // IA/plano: mismas actividades por etapa que antes, con Periodo/Duración en blanco.
+  function programaScaffold(){
+    const P="Preparación y construcción", O="Operación", A="Abandono";
+    const r=(etapa,act)=>[etapa,act,"",""];
     return [
-      band("PREPARACIÓN DEL SITIO Y CONSTRUCCIÓN"),
-      fila("Limpieza del terreno"), fila("Excavación para cimentaciones del tanque"),
-      fila("Construcción estructural de oficinas y caseta de vigilancia"),
-      fila("Instalación del tanque de almacenamiento y equipos"),
-      fila("Consumo de insumos"), fila("Generación y manejo de residuos sólidos"),
-      fila("Generación y manejo de aguas residuales"), fila("Contratación de mano de obra"),
-      band("OPERACIÓN Y MANTENIMIENTO"),
-      fila("Operación de la estación de servicio"), fila("Operación del motor para bomba de llenado"),
-      fila("Transporte de insumos y personal"), fila("Consumo de insumos"),
-      fila("Generación y manejo de residuos sólidos"), fila("Generación y manejo de aguas residuales"),
-      fila("Generación y manejo de residuos peligrosos"), fila("Contratación de mano de obra"),
-      band("ABANDONO DEL SITIO"),
-      fila("Desmantelamiento de tanque"), fila("Demolición de estructuras de concreto y block"),
-      fila("Transporte de equipos, residuos de demolición y personal"),
-      fila("Generación y manejo de residuos sólidos"), fila("Generación y manejo de aguas residuales"),
-      fila("Generación y manejo de residuos peligrosos"), fila("Contratación de mano de obra")
+      r(P,"Limpieza del terreno"), r(P,"Excavación para cimentaciones del tanque"),
+      r(P,"Construcción estructural de oficinas y caseta de vigilancia"),
+      r(P,"Instalación del tanque de almacenamiento y equipos"),
+      r(P,"Consumo de insumos"), r(P,"Generación y manejo de residuos sólidos"),
+      r(P,"Generación y manejo de aguas residuales"), r(P,"Contratación de mano de obra"),
+      r(O,"Operación de la estación de servicio"), r(O,"Operación del motor para bomba de llenado"),
+      r(O,"Transporte de insumos y personal"), r(O,"Consumo de insumos"),
+      r(O,"Generación y manejo de residuos sólidos"), r(O,"Generación y manejo de aguas residuales"),
+      r(O,"Generación y manejo de residuos peligrosos"), r(O,"Contratación de mano de obra"),
+      r(A,"Desmantelamiento de tanque"), r(A,"Demolición de estructuras de concreto y block"),
+      r(A,"Transporte de equipos, residuos de demolición y personal"),
+      r(A,"Generación y manejo de residuos sólidos"), r(A,"Generación y manejo de aguas residuales"),
+      r(A,"Generación y manejo de residuos peligrosos"), r(A,"Contratación de mano de obra")
     ];
   }
   function actividades(extra){

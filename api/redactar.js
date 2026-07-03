@@ -481,6 +481,8 @@ const TABLAS_PLANO = [
     columnas: ["No.", "Ubicación", "Tipo", "Capacidad", "Evidencia"] },
   { key: "tablaDistancias", titulo: "Distancias mínimas",
     columnas: ["Elemento", "Distancia requerida (m)", "Distancia de proyecto (m)", "Cumple"] },
+  { key: "tablaPrograma", titulo: "Programa de trabajo — actividades y duración estimada",
+    columnas: ["Etapa", "Actividad", "Periodo estimado", "Duración"] },
 ];
 
 // Una sola llamada que le pide al modelo redacción + 4 tablas a la vez tarda
@@ -528,21 +530,34 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
   const notasTxt = notas_adicionales
     ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "";
 
+  // Llamada 1 — narrativa POR SUBSECCIÓN (cada una un arreglo de párrafos), para
+  // que cada apartado III.1.x reciba su propio texto en vez de un blob único.
   const instruccionTexto =
     `${ctx(d)}\n\n` +
-    "Con base ÚNICAMENTE en el plano adjunto (y los datos del proyecto de arriba), redacta los " +
-    "apartados III.1.2 a III.1.7 (Descripción Técnica) del Informe Preventivo, como un ARREGLO de " +
-    "4 a 6 párrafos (un string por párrafo, cada uno sin saltos de línea internos), cubriendo en " +
-    "orden: actividades principales del ciclo operativo que se aprecien en el plano; dimensiones y " +
-    "distribución de áreas del predio (léelas de las cotas/leyenda); programa de trabajo por " +
-    "etapas si el plano lo indica (si no, escribe \"[Dato pendiente: programa de trabajo]\"); y " +
-    "detalles técnicos de los equipos mostrados (tanques, líneas, dispensarios, SRV, sistemas de " +
-    "seguridad) con sus identificadores tal como aparecen en el plano (p.ej. T-01, T-02). No uses " +
-    "markdown ni encabezados de subsección dentro de ningún párrafo.\n\n" +
-    "Devuelve ÚNICAMENTE:\n{ \"texto\": [\"párrafo 1\", \"párrafo 2\", \"...\"] }\n\n" +
-    "No inventes datos; usa \"[Dato pendiente: descripción]\" si algo no es determinable. " +
+    "Con base en el plano adjunto (y los datos del proyecto de arriba), interpreta el plano y " +
+    "redacta la Descripción Técnica (Sección III.1) del Informe Preventivo, en español técnico " +
+    "formal, SEPARADA POR SUBSECCIÓN. Devuelve cada subsección como un arreglo de párrafos (un " +
+    "string por párrafo, sin saltos de línea internos, sin markdown ni encabezados):\n" +
+    "- \"general\": III.1 visión general del proyecto/actividad proyectada (1-2 párrafos).\n" +
+    "- \"actividades\": III.1.2 actividades principales del ciclo operativo que se aprecian en el " +
+    "plano (recepción, almacenamiento, despacho, recuperación de vapores, etc.) (1-2 párrafos).\n" +
+    "- \"dimensiones\": III.1.3 dimensiones y distribución de áreas del predio, leídas/inferidas de " +
+    "las cotas, escala y leyenda del plano (superficie del predio, áreas de tanques, islas de " +
+    "despacho, oficinas, patios de maniobra, etc.) (1-2 párrafos).\n" +
+    "- \"caracteristicas\": III.1.4 características del proyecto según su naturaleza (procesos, " +
+    "servicios ofrecidos, tipo de instalación) (1-2 párrafos).\n" +
+    "- \"detallesTecnicos\": III.1.7 detalles técnicos de los equipos mostrados (tanques con sus " +
+    "identificadores tal como aparecen —p.ej. T-01, T-02—, líneas y tuberías, dispensarios/islas, " +
+    "sistema de recuperación de vapores SRV, sistemas de seguridad) (2-3 párrafos).\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"narrativa\": { \"general\": [\"...\"], \"actividades\": [\"...\"], " +
+    "\"dimensiones\": [\"...\"], \"caracteristicas\": [\"...\"], \"detallesTecnicos\": [\"...\"] } }\n\n" +
+    "Interpreta razonablemente lo que el plano permita; usa \"[Dato pendiente: descripción]\" " +
+    "dentro del párrafo solo cuando un dato concreto no sea determinable del plano. " +
     reglaComillas + notasTxt;
 
+  // Llamada 2 — tablas. Se PERMITE interpretación razonable del plano (no solo
+  // extracción literal), porque los planos suelen mostrar equipos gráficamente
+  // sin una tabla de especificaciones. Incluye la tabla de programa de trabajo.
   const specTablas = TABLAS_PLANO
     .map((t) => `- "${t.key}" (${t.titulo}): columnas [${t.columnas.join(", ")}]`)
     .join("\n");
@@ -551,17 +566,26 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     TABLAS_PLANO.map((t) => `"${t.key}": [ { ${t.columnas.map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") +
     " }";
   const instruccionTablas =
-    "Con base ÚNICAMENTE en el plano adjunto, llena las siguientes tablas SOLO con lo que el " +
-    "plano muestre explícitamente (cotas, tablas de especificaciones, leyendas, notas):\n" +
-    specTablas + "\n\n" +
+    `${ctx(d)}\n\n` +
+    "Con base en el plano adjunto, interpreta lo que muestra (cotas, escala, símbolos, etiquetas, " +
+    "leyendas, notas, conteo de equipos, productos por rótulo/color) y llena las siguientes " +
+    "tablas:\n" + specTablas + "\n\n" +
+    "Para \"tablaPrograma\" (III.1.6 Programa de trabajo): interpreta los tiempos y lapsos " +
+    "estimados por actividad y agrúpalas por etapa (Preparación y construcción, Operación, " +
+    "Abandono). \"Periodo estimado\" = la ventana temporal (ej. \"Semanas 1 a 4\" o \"Mes 1 a 2\"); " +
+    "\"Duración\" = cuánto dura esa actividad (ej. \"4 semanas\", \"25 años\"). Si el plano no " +
+    "indica tiempos, estima un cronograma típico de una estación de servicio y marca la Duración " +
+    "con \"[Dato pendiente]\" cuando no puedas estimarla con fundamento.\n\n" +
     "Devuelve ÚNICAMENTE:\n{ \"tablas\": " + formaTablas + " }\n\n" +
-    "No inventes cifras ni marcas que no estén en el plano; usa \"\" en las celdas que no puedas " +
-    "leer; incluye TODAS las filas que el plano muestre, sin límite. " + reglaComillas + notasTxt;
+    "Reglas: no inventes marcas/números de serie/dictámenes que no estén en el plano (usa \"\" o " +
+    "\"[Dato pendiente]\" en esas celdas); sí puedes inferir capacidades, cantidades, productos y " +
+    "distancias de las cotas y símbolos. Incluye TODAS las filas que el plano muestre, sin límite. " +
+    reglaComillas + notasTxt;
 
   const [rTexto, rTablas] = await Promise.all([
-    llamarPlano(apiKey, docBlock, instruccionTexto, 3072, "texto")
-      .catch((e) => { console.error("[plano] falló la parte de texto:", e.message); return null; }),
-    llamarPlano(apiKey, docBlock, instruccionTablas, 6144, "tablas")
+    llamarPlano(apiKey, docBlock, instruccionTexto, 4096, "narrativa")
+      .catch((e) => { console.error("[plano] falló la parte de narrativa:", e.message); return null; }),
+    llamarPlano(apiKey, docBlock, instruccionTablas, 8192, "tablas")
       .catch((e) => { console.error("[plano] falló la parte de tablas:", e.message); return null; }),
   ]);
 
@@ -572,12 +596,26 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     );
   }
 
-  const texto = rTexto && Array.isArray(rTexto.texto) ? rTexto.texto.join("\n\n") : (rTexto && rTexto.texto) || "";
+  // Une cada subsección (arreglo de párrafos) con doble salto de línea, para que
+  // IAP() del documento la vuelva a partir en párrafos.
+  const N = (rTexto && rTexto.narrativa) || {};
+  const unir = (v) => {
+    const s = Array.isArray(v) ? v.join("\n\n") : (v || "");
+    return limpiarMarkdown(s);
+  };
+  const narrativa = {
+    general: unir(N.general),
+    actividades: unir(N.actividades),
+    dimensiones: unir(N.dimensiones),
+    caracteristicas: unir(N.caracteristicas),
+    detallesTecnicos: unir(N.detallesTecnicos),
+  };
   const tablas = (rTablas && rTablas.tablas) || {};
-  if (!texto.trim() && !Object.keys(tablas).length) {
+  const hayNarrativa = Object.values(narrativa).some((s) => s.trim());
+  if (!hayNarrativa && !Object.keys(tablas).length) {
     console.warn("[plano] ambas llamadas devolvieron JSON válido pero vacío — revisa la calidad/legibilidad del PDF.");
   }
-  return { texto: limpiarMarkdown(texto), tablas };
+  return { narrativa, tablas };
 }
 
 // ── MODO "TABLA" ──────────────────────────────────────────────────────────
