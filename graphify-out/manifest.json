@@ -1,0 +1,37 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1783010845.0535192,
+    "ast_hash": "e51077b6a7f1f67afc748f1a32a1557d",
+    "semantic_hash": "e51077b6a7f1f67afc748f1a32a1557d"
+  },
+  "api/redactar.js": {
+    "mtime": 1783009509.4243567,
+    "ast_hash": "416437dde19db7cbf45046e9bdc1de65",
+    "semantic_hash": "416437dde19db7cbf45046e9bdc1de65"
+  },
+  "app.js": {
+    "mtime": 1783009626.2870133,
+    "ast_hash": "78edb3dccacfa0be744ab6b3b6f39f3f",
+    "semantic_hash": "78edb3dccacfa0be744ab6b3b6f39f3f"
+  },
+  "data.js": {
+    "mtime": 1782833038.4283328,
+    "ast_hash": "97a8d6b633b819e1d2c69e835b798495",
+    "semantic_hash": "97a8d6b633b819e1d2c69e835b798495"
+  },
+  "documento.js": {
+    "mtime": 1783009612.6194797,
+    "ast_hash": "b45256d0dca1039ce9eba10ccc3e1bc6",
+    "semantic_hash": "b45256d0dca1039ce9eba10ccc3e1bc6"
+  },
+  "sistema.js": {
+    "mtime": 1782227899.3642707,
+    "ast_hash": "0a1fb908dbf23dbfb5b6367e11179632",
+    "semantic_hash": "0a1fb908dbf23dbfb5b6367e11179632"
+  },
+  "vercel.json": {
+    "mtime": 1782189358.421973,
+    "ast_hash": "93520e4fca16a7813910b0eb4977d244",
+    "semantic_hash": "93520e4fca16a7813910b0eb4977d244"
+  }
+}

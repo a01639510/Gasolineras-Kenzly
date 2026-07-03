@@ -1,0 +1,249 @@
+{
+  "communities": {
+    "0": [
+      "app",
+      "app_camposimportables",
+      "app_cargarjson",
+      "app_checklistid",
+      "app_closemodal",
+      "app_findfield",
+      "app_load",
+      "app_openmodal",
+      "app_refreshpreviews",
+      "app_renderdoctoc",
+      "app_renderfigarea",
+      "app_seccionstatus",
+      "app_toggledoctoc"
+    ],
+    "1": [
+      "app_deleteproject",
+      "app_fmtdate",
+      "app_hidehome",
+      "app_loadidx",
+      "app_migrateolddata",
+      "app_newproject",
+      "app_normalize",
+      "app_openproject",
+      "app_pkey",
+      "app_renderhome",
+      "app_savecurrentproject",
+      "app_saveidx",
+      "app_updateprogress"
+    ],
+    "2": [
+      "api_redactar",
+      "api_redactar_ctx",
+      "api_redactar_estructurartabla",
+      "api_redactar_extra",
+      "api_redactar_extraerperfil",
+      "api_redactar_extraerprograma",
+      "api_redactar_fetchsheetcsv",
+      "api_redactar_limpiarmarkdown",
+      "api_redactar_meta",
+      "api_redactar_prompts",
+      "api_redactar_redactarseccion"
+    ],
+    "3": [
+      "app_addfigura",
+      "app_edittitulo",
+      "app_g",
+      "app_guardarjson",
+      "app_onestadochange",
+      "app_programarlive",
+      "app_save",
+      "app_toast",
+      "app_updatefieldfalta",
+      "app_updatetocdots",
+      "app_vars"
+    ],
+    "4": [
+      "app_bindanexos",
+      "app_bindchecklist",
+      "app_bindfiguras",
+      "app_bindia",
+      "app_bindimportar",
+      "app_bindinputs",
+      "app_bindprogramas",
+      "app_bindsusdinamica",
+      "app_bindtablaia",
+      "app_renderform",
+      "app_setupscrollspy"
+    ],
+    "5": [
+      "app_buildblocks",
+      "app_contarnuevos",
+      "app_contarpendientes",
+      "app_exportword",
+      "app_figlist",
+      "app_mostrarvista",
+      "app_paras",
+      "app_renderblocks",
+      "app_renderlivedoc",
+      "app_rendertabla",
+      "app_wordstyles"
+    ],
+    "6": [
+      "app_badge",
+      "app_renderanexos",
+      "app_renderchecklist",
+      "app_renderestrategias",
+      "app_renderfield",
+      "app_renderinstrumentos",
+      "app_renderprogramas",
+      "app_renderpuntos",
+      "app_rendersusdinamica",
+      "app_rendersustancias"
+    ],
+    "7": [
+      "app_filetodataurl",
+      "app_idball",
+      "app_idbopen",
+      "app_idbput",
+      "app_init",
+      "app_setimagen",
+      "app_showhome",
+      "app_togglefocus",
+      "app_volver"
+    ],
+    "8": [
+      "documento",
+      "documento_actividades",
+      "documento_build",
+      "documento_empty",
+      "documento_fechalarga",
+      "documento_gantt"
+    ],
+    "9": [
+      "vercel",
+      "vercel_buildcommand",
+      "vercel_framework",
+      "vercel_installcommand",
+      "vercel_outputdirectory",
+      "vercel_schema"
+    ],
+    "10": [
+      "app_fmtmoney",
+      "app_interp",
+      "app_makectx",
+      "app_numerarfiguras"
+    ],
+    "11": [
+      "app_delimagen",
+      "app_idbdel",
+      "app_removefigura"
+    ],
+    "12": [
+      "data"
+    ],
+    "13": [
+      "sistema"
+    ]
+  },
+  "cohesion": {
+    "0": 0.16666666666666666,
+    "1": 0.3076923076923077,
+    "2": 0.23636363636363636,
+    "3": 0.21818181818181817,
+    "4": 0.18181818181818182,
+    "5": 0.2,
+    "6": 0.3333333333333333,
+    "7": 0.2222222222222222,
+    "8": 0.6,
+    "9": 0.3333333333333333,
+    "10": 0.5,
+    "11": 0.6666666666666666,
+    "12": 1.0,
+    "13": 1.0
+  },
+  "gods": [
+    {
+      "id": "app_renderform",
+      "label": "renderForm()",
+      "degree": 22
+    },
+    {
+      "id": "app_renderfield",
+      "label": "renderField()",
+      "degree": 11
+    },
+    {
+      "id": "app_save",
+      "label": "save()",
+      "degree": 10
+    },
+    {
+      "id": "app_newproject",
+      "label": "newProject()",
+      "degree": 10
+    },
+    {
+      "id": "app_init",
+      "label": "init()",
+      "degree": 10
+    },
+    {
+      "id": "app_g",
+      "label": "g()",
+      "degree": 9
+    },
+    {
+      "id": "app_renderlivedoc",
+      "label": "renderLiveDoc()",
+      "degree": 9
+    },
+    {
+      "id": "app_badge",
+      "label": "badge()",
+      "degree": 8
+    },
+    {
+      "id": "documento_build",
+      "label": "build()",
+      "degree": 8
+    },
+    {
+      "id": "app_savecurrentproject",
+      "label": "saveCurrentProject()",
+      "degree": 7
+    }
+  ],
+  "surprises": [
+    {
+      "source": "redactarSeccion()",
+      "target": "build()",
+      "source_files": [
+        "api/redactar.js",
+        "documento.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "build()",
+      "target": "g()",
+      "source_files": [
+        "documento.js",
+        "app.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "build()",
+      "target": "interp()",
+      "source_files": [
+        "documento.js",
+        "app.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
