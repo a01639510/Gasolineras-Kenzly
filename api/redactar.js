@@ -483,12 +483,66 @@ const TABLAS_PLANO = [
     columnas: ["Elemento", "Distancia requerida (m)", "Distancia de proyecto (m)", "Cumple"] },
 ];
 
+// Una sola llamada que le pide al modelo redacción + 4 tablas a la vez tarda
+// demasiado (PDF con visión + salida larga) y se acerca al límite de tiempo
+// de la función serverless. Se parte en 2 llamadas MÁS CHICAS Y EN PARALELO
+// (Promise.all) — el tiempo total pasa a ser el de la más lenta, no la suma
+// de ambas, y si una falla la otra igual se aprovecha.
+async function llamarPlano(apiKey, docBlock, instruccion, maxTokens, etiqueta) {
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: maxTokens, system: SYSTEM_PLANO,
+      messages: [{ role: "user", content: [docBlock, { type: "text", text: instruccion }] }],
+    }),
+  });
+  if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
+  const data = await resp.json();
+  const truncado = data.stop_reason === "max_tokens";
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  console.log(`[plano:${etiqueta}] stop_reason=${data.stop_reason} respuesta_chars=${txt.length}`);
+  const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  let jsonStr = sinCercas;
+  const i = sinCercas.indexOf("{"), j = sinCercas.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = sinCercas.slice(i, j + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    const motivo = truncado ? "la respuesta se cortó por límite de longitud" : e.message;
+    console.error(`[plano:${etiqueta}] JSON inválido (${motivo}). Primeros 500 chars:`, txt.slice(0, 500));
+    throw new Error(motivo);
+  }
+}
+
 async function interpretarPlano({ datos, plano, notas_adicionales }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
   if (!plano || !plano.data) throw new Error("Adjunta el PDF del plano.");
 
   const d = datos || {};
+  const docBlock = { type: "document", source: { type: "base64", media_type: plano.media_type || "application/pdf", data: plano.data } };
+  const reglaComillas =
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor de texto — escribe " +
+    "'pulg' en su lugar; rompe el JSON.";
+  const notasTxt = notas_adicionales
+    ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "";
+
+  const instruccionTexto =
+    `${ctx(d)}\n\n` +
+    "Con base ÚNICAMENTE en el plano adjunto (y los datos del proyecto de arriba), redacta los " +
+    "apartados III.1.2 a III.1.7 (Descripción Técnica) del Informe Preventivo, como un ARREGLO de " +
+    "4 a 6 párrafos (un string por párrafo, cada uno sin saltos de línea internos), cubriendo en " +
+    "orden: actividades principales del ciclo operativo que se aprecien en el plano; dimensiones y " +
+    "distribución de áreas del predio (léelas de las cotas/leyenda); programa de trabajo por " +
+    "etapas si el plano lo indica (si no, escribe \"[Dato pendiente: programa de trabajo]\"); y " +
+    "detalles técnicos de los equipos mostrados (tanques, líneas, dispensarios, SRV, sistemas de " +
+    "seguridad) con sus identificadores tal como aparecen en el plano (p.ej. T-01, T-02). No uses " +
+    "markdown ni encabezados de subsección dentro de ningún párrafo.\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"texto\": [\"párrafo 1\", \"párrafo 2\", \"...\"] }\n\n" +
+    "No inventes datos; usa \"[Dato pendiente: descripción]\" si algo no es determinable. " +
+    reglaComillas + notasTxt;
+
   const specTablas = TABLAS_PLANO
     .map((t) => `- "${t.key}" (${t.titulo}): columnas [${t.columnas.join(", ")}]`)
     .join("\n");
@@ -496,65 +550,34 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     "{ " +
     TABLAS_PLANO.map((t) => `"${t.key}": [ { ${t.columnas.map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") +
     " }";
+  const instruccionTablas =
+    "Con base ÚNICAMENTE en el plano adjunto, llena las siguientes tablas SOLO con lo que el " +
+    "plano muestre explícitamente (cotas, tablas de especificaciones, leyendas, notas):\n" +
+    specTablas + "\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"tablas\": " + formaTablas + " }\n\n" +
+    "No inventes cifras ni marcas que no estén en el plano; usa \"\" en las celdas que no puedas " +
+    "leer; incluye TODAS las filas que el plano muestre, sin límite. " + reglaComillas + notasTxt;
 
-  const instruccion =
-    `${ctx(d)}\n\n` +
-    "Con base ÚNICAMENTE en el plano adjunto (y los datos del proyecto de arriba), genera dos cosas:\n\n" +
-    "1) \"texto\": la redacción de los apartados III.1.2 a III.1.7 (Descripción Técnica) del " +
-    "Informe Preventivo, como un ARREGLO de 4 a 6 párrafos (un string por párrafo, cada uno sin " +
-    "saltos de línea internos), cubriendo en orden: actividades principales del ciclo operativo " +
-    "que se aprecien en el plano; dimensiones y distribución de áreas del predio (léelas de las " +
-    "cotas/leyenda); programa de trabajo por etapas si el plano lo indica (si no, escribe " +
-    "\"[Dato pendiente: programa de trabajo]\"); y detalles técnicos de los equipos mostrados " +
-    "(tanques, líneas, dispensarios, SRV, sistemas de seguridad) con sus identificadores tal como " +
-    "aparecen en el plano (p.ej. T-01, T-02). No uses markdown ni encabezados de subsección dentro " +
-    "de ningún párrafo.\n\n" +
-    "2) \"tablas\": llena las siguientes tablas SOLO con lo que el plano muestre explícitamente " +
-    "(cotas, tablas de especificaciones, leyendas, notas):\n" + specTablas + "\n\n" +
-    "Devuelve ÚNICAMENTE:\n{ \"texto\": [\"párrafo 1\", \"párrafo 2\", \"...\"], \"tablas\": " + formaTablas + " }\n\n" +
-    "Reglas: no inventes cifras ni marcas que no estén en el plano; usa \"\" en las celdas que no " +
-    "puedas leer; incluye TODAS las filas que el plano muestre, sin límite; nunca uses el símbolo " +
-    "\" (comillas de pulgadas) dentro de ningún valor de texto, escribe 'pulg' en su lugar." +
-    (notas_adicionales ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "");
+  const [rTexto, rTablas] = await Promise.all([
+    llamarPlano(apiKey, docBlock, instruccionTexto, 3072, "texto")
+      .catch((e) => { console.error("[plano] falló la parte de texto:", e.message); return null; }),
+    llamarPlano(apiKey, docBlock, instruccionTablas, 6144, "tablas")
+      .catch((e) => { console.error("[plano] falló la parte de tablas:", e.message); return null; }),
+  ]);
 
-  const content = [
-    { type: "document", source: { type: "base64", media_type: plano.media_type || "application/pdf", data: plano.data } },
-    { type: "text", text: instruccion },
-  ];
-
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: SYSTEM_PLANO, messages: [{ role: "user", content }] }),
-  });
-  if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
-  const data = await resp.json();
-  const truncado = data.stop_reason === "max_tokens";
-  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-  console.log(`[plano] stop_reason=${data.stop_reason} pdf_bytes~=${Math.round((plano.data.length * 3) / 4)} respuesta_chars=${txt.length}`);
-  // Quita cercas ```json ... ``` si el modelo las agregó a pesar de la instrucción.
-  const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-  let jsonStr = sinCercas;
-  const i = sinCercas.indexOf("{"), j = sinCercas.lastIndexOf("}");
-  if (i !== -1 && j !== -1) jsonStr = sinCercas.slice(i, j + 1);
-  let parsed;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (e) {
-    const motivo = truncado
-      ? "la respuesta se cortó por límite de longitud (el plano/las tablas eran muy extensos)"
-      : `${e.message}`;
-    console.error(`[plano] JSON inválido (${motivo}). Primeros 500 chars de la respuesta:`, txt.slice(0, 500));
+  if (!rTexto && !rTablas) {
     throw new Error(
-      `La IA no devolvió JSON válido para el plano (${motivo}). Intenta de nuevo, o con un plano ` +
-      `más simple/menos páginas si el problema persiste.`
+      "La IA no pudo procesar el plano (fallaron tanto la redacción como las tablas). Intenta de " +
+      "nuevo, o con un plano más simple/menos páginas si el problema persiste."
     );
   }
-  const texto = Array.isArray(parsed.texto) ? parsed.texto.join("\n\n") : (parsed.texto || "");
-  if (!texto.trim() && !Object.keys(parsed.tablas || {}).length) {
-    console.warn("[plano] la IA devolvió JSON válido pero vacío — revisa la calidad/legibilidad del PDF adjunto.");
+
+  const texto = rTexto && Array.isArray(rTexto.texto) ? rTexto.texto.join("\n\n") : (rTexto && rTexto.texto) || "";
+  const tablas = (rTablas && rTablas.tablas) || {};
+  if (!texto.trim() && !Object.keys(tablas).length) {
+    console.warn("[plano] ambas llamadas devolvieron JSON válido pero vacío — revisa la calidad/legibilidad del PDF.");
   }
-  return { texto: limpiarMarkdown(texto), tablas: parsed.tablas || {} };
+  return { texto: limpiarMarkdown(texto), tablas };
 }
 
 // ── MODO "TABLA" ──────────────────────────────────────────────────────────
