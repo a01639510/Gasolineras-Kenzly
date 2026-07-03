@@ -466,7 +466,11 @@ const SYSTEM_PLANO =
   "ni cifras que no se puedan leer o inferir razonablemente del plano; si algo no es " +
   "determinable, usa \"[Dato pendiente: descripción]\" en el texto o cadena vacía \"\" en las " +
   "tablas. PROHIBIDO TODO MARKDOWN en el texto narrativo (sin #, sin **, sin viñetas, sin " +
-  "encabezados de subsección). Devuelve ÚNICAMENTE JSON válido, sin texto antes ni después.";
+  "encabezados de subsección). Devuelve ÚNICAMENTE JSON válido, sin texto antes ni después. " +
+  "JSON válido significa: nunca un salto de línea real dentro de un string (usa el arreglo de " +
+  "párrafos indicado abajo, uno por elemento, sin \\n dentro de cada elemento); nunca una " +
+  "comilla doble literal sin escapar dentro de un string (si necesitas indicar pulgadas, escribe " +
+  "la palabra 'pulg', nunca el símbolo \" suelto).";
 
 const TABLAS_PLANO = [
   { key: "tablaTanques", titulo: "Tanques sujetos a presión",
@@ -497,18 +501,20 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     `${ctx(d)}\n\n` +
     "Con base ÚNICAMENTE en el plano adjunto (y los datos del proyecto de arriba), genera dos cosas:\n\n" +
     "1) \"texto\": la redacción de los apartados III.1.2 a III.1.7 (Descripción Técnica) del " +
-    "Informe Preventivo, en prosa técnica continua de 4 a 6 párrafos, cubriendo en orden: " +
-    "actividades principales del ciclo operativo que se aprecien en el plano; dimensiones y " +
-    "distribución de áreas del predio (léelas de las cotas/leyenda); programa de trabajo por " +
-    "etapas si el plano lo indica (si no, escribe \"[Dato pendiente: programa de trabajo]\"); y " +
-    "detalles técnicos de los equipos mostrados (tanques, líneas, dispensarios, SRV, sistemas de " +
-    "seguridad) con sus identificadores tal como aparecen en el plano (p.ej. T-01, T-02). No uses " +
-    "markdown ni encabezados de subsección.\n\n" +
+    "Informe Preventivo, como un ARREGLO de 4 a 6 párrafos (un string por párrafo, cada uno sin " +
+    "saltos de línea internos), cubriendo en orden: actividades principales del ciclo operativo " +
+    "que se aprecien en el plano; dimensiones y distribución de áreas del predio (léelas de las " +
+    "cotas/leyenda); programa de trabajo por etapas si el plano lo indica (si no, escribe " +
+    "\"[Dato pendiente: programa de trabajo]\"); y detalles técnicos de los equipos mostrados " +
+    "(tanques, líneas, dispensarios, SRV, sistemas de seguridad) con sus identificadores tal como " +
+    "aparecen en el plano (p.ej. T-01, T-02). No uses markdown ni encabezados de subsección dentro " +
+    "de ningún párrafo.\n\n" +
     "2) \"tablas\": llena las siguientes tablas SOLO con lo que el plano muestre explícitamente " +
     "(cotas, tablas de especificaciones, leyendas, notas):\n" + specTablas + "\n\n" +
-    "Devuelve ÚNICAMENTE:\n{ \"texto\": \"...\", \"tablas\": " + formaTablas + " }\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"texto\": [\"párrafo 1\", \"párrafo 2\", \"...\"], \"tablas\": " + formaTablas + " }\n\n" +
     "Reglas: no inventes cifras ni marcas que no estén en el plano; usa \"\" en las celdas que no " +
-    "puedas leer; incluye TODAS las filas que el plano muestre, sin límite." +
+    "puedas leer; incluye TODAS las filas que el plano muestre, sin límite; nunca uses el símbolo " +
+    "\" (comillas de pulgadas) dentro de ningún valor de texto, escribe 'pulg' en su lugar." +
     (notas_adicionales ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "");
 
   const content = [
@@ -523,13 +529,27 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
   });
   if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
   const data = await resp.json();
+  const truncado = data.stop_reason === "max_tokens";
   const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-  let jsonStr = txt;
-  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
-  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  // Quita cercas ```json ... ``` si el modelo las agregó a pesar de la instrucción.
+  const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  let jsonStr = sinCercas;
+  const i = sinCercas.indexOf("{"), j = sinCercas.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = sinCercas.slice(i, j + 1);
   let parsed;
-  try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el plano."); }
-  return { texto: limpiarMarkdown(parsed.texto || ""), tablas: parsed.tablas || {} };
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e) {
+    const motivo = truncado
+      ? "la respuesta se cortó por límite de longitud (el plano/las tablas eran muy extensos)"
+      : `${e.message}`;
+    throw new Error(
+      `La IA no devolvió JSON válido para el plano (${motivo}). Intenta de nuevo, o con un plano ` +
+      `más simple/menos páginas si el problema persiste.`
+    );
+  }
+  const texto = Array.isArray(parsed.texto) ? parsed.texto.join("\n\n") : (parsed.texto || "");
+  return { texto: limpiarMarkdown(texto), tablas: parsed.tablas || {} };
 }
 
 // ── MODO "TABLA" ──────────────────────────────────────────────────────────
@@ -560,7 +580,8 @@ async function estructurarTabla({ tablas, datos_crudos, imagen }) {
     `Devuelve ÚNICAMENTE un objeto JSON con esta forma exacta:\n${forma}\n\n` +
     `Tablas a llenar:\n${spec}\n\n` +
     `Reglas: una fila por registro; no inventes datos (campo vacío si no aparece en la fuente); ` +
-    `incluye TODAS las filas encontradas, sin límite.` +
+    `incluye TODAS las filas encontradas, sin límite; nunca uses el símbolo " (comillas de ` +
+    `pulgadas) dentro de ningún valor, escribe 'pulg' en su lugar — rompe el JSON.` +
     (datos_crudos ? `\n\nDatos crudos:\n${datos_crudos}` : "");
 
   const content = [];
@@ -575,12 +596,19 @@ async function estructurarTabla({ tablas, datos_crudos, imagen }) {
   });
   if (!resp.ok) { const d = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`); }
   const data = await resp.json();
+  const truncado = data.stop_reason === "max_tokens";
   const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-  let jsonStr = txt;
-  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
-  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
+  const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  let jsonStr = sinCercas;
+  const i = sinCercas.indexOf("{"), j = sinCercas.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = sinCercas.slice(i, j + 1);
   let parsed;
-  try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para la tabla."); }
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e) {
+    const motivo = truncado ? "la respuesta se cortó por límite de longitud (demasiadas filas)" : e.message;
+    throw new Error(`La IA no devolvió JSON válido para la tabla (${motivo}). Intenta de nuevo.`);
+  }
   return { tablas: parsed };
 }
 
