@@ -359,21 +359,122 @@ function fetchSheetCSV(url) {
     .catch(() => "");
 }
 
+function sheetDocId(url) {
+  const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+// Lee TODAS las pestañas de un Google Sheet público, sin autenticación ni
+// dependencias: (1) /htmlview trae en su HTML embebido la lista {name, gid} de
+// cada pestaña en orden, sin login; (2) cada pestaña se descarga por separado
+// vía export?format=csv&gid=. Si htmlview falla o no encuentra pestañas, cae a
+// una sola "pestaña" con fetchSheetCSV (comportamiento anterior).
+async function fetchSheetTabs(url) {
+  const id = sheetDocId(url);
+  if (!id) return [];
+
+  let tabs = [];
+  try {
+    const resp = await fetch(`https://docs.google.com/spreadsheets/d/${id}/htmlview`);
+    if (resp.ok) {
+      const html = await resp.text();
+      const re = /\{name:\s*"((?:[^"\\]|\\.)*)"[^{}]*?gid:\s*"(\d+)"/g;
+      const seen = new Set();
+      let mm;
+      while ((mm = re.exec(html))) {
+        const gid = mm[2];
+        if (seen.has(gid)) continue;
+        seen.add(gid);
+        tabs.push({ name: mm[1].replace(/\\"/g, '"'), gid });
+      }
+    }
+  } catch (e) {
+    console.error("[fetchSheetTabs] htmlview falló:", e.message);
+  }
+
+  if (!tabs.length) {
+    const csv = await fetchSheetCSV(url);
+    return csv ? [{ name: "Hoja 1", csv }] : [];
+  }
+
+  const resultados = await Promise.all(
+    tabs.map(async (t) => {
+      try {
+        const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${t.gid}`);
+        return { name: t.name, csv: r.ok ? await r.text() : "" };
+      } catch (e) {
+        return { name: t.name, csv: "" };
+      }
+    })
+  );
+  console.log(`[fetchSheetTabs] ${id}: ${resultados.length} pestañas — ${resultados.map((r) => r.name).join(", ")}`);
+  return resultados.filter((t) => t.csv && t.csv.trim());
+}
+
+// Llamada genérica a Claude que espera JSON como respuesta, con el mismo
+// manejo robusto ya probado en el modo "plano": quita cercas ```json```,
+// distingue truncamiento por max_tokens de JSON genuinamente mal formado, y
+// loggea lo suficiente para diagnosticar desde Vercel → Logs.
+async function llamarJSON(apiKey, system, content, maxTokens, etiqueta) {
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content }] }),
+  });
+  if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
+  const data = await resp.json();
+  const truncado = data.stop_reason === "max_tokens";
+  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  console.log(`[${etiqueta}] stop_reason=${data.stop_reason} respuesta_chars=${txt.length}`);
+  const sinCercas = txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  let jsonStr = sinCercas;
+  const i = sinCercas.indexOf("{"), j = sinCercas.lastIndexOf("}");
+  if (i !== -1 && j !== -1) jsonStr = sinCercas.slice(i, j + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    const motivo = truncado ? "la respuesta se cortó por límite de longitud" : e.message;
+    console.error(`[${etiqueta}] JSON inválido (${motivo}). Primeros 500 chars:`, txt.slice(0, 500));
+    throw new Error(motivo);
+  }
+}
+
 async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
   if (!Array.isArray(campos) || !campos.length) throw new Error("Faltan los campos a extraer.");
 
+  // RECOPILACION_DATOS puede traer varias pestañas (identificación, predio,
+  // polígono, fechas/inversión/empleos, personal/brigada, instalaciones,
+  // sustancias, residuos, seguridad, póliza, checklist, cronograma, fotos).
+  // fetchSheetTabs lee TODAS, cada una etiquetada por nombre.
   let fuente = datos_crudos || "";
-  if (sheet_url) { const csv = await fetchSheetCSV(sheet_url); if (csv) fuente += "\n\n" + csv; }
+  let hayCronograma = false;
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    if (tabs.length) {
+      fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${t.csv}`).join("");
+      hayCronograma = tabs.some((t) => /cronograma/i.test(t.name));
+    }
+  }
 
   const lista = campos
     .map((c) => `- ${c.id}: ${c.label}${c.opts && c.opts.length ? ` (opciones: ${c.opts.join(" | ")})` : ""}`)
     .join("\n");
+
+  const instruccionCronograma = hayCronograma
+    ? ' Además, la fuente trae una pestaña de Cronograma (columnas tipo Código/Etapa/Actividad/Duración ' +
+      'típica/Notas): devuelve también "tablas": { "tablaPrograma": [ { "Etapa": "Preparación y ' +
+      'construcción"|"Operación"|"Abandono", "Actividad": "...", "Periodo estimado": "...", "Duración": ' +
+      '"..." }, ... ] } — una fila por actividad del cronograma, agrupada por Etapa (normaliza el nombre ' +
+      'de etapa a esas 3 opciones), copiando la Duración típica tal cual y dejando "Periodo estimado" ' +
+      'vacío si el Sheet no da un orden temporal explícito.'
+    : "";
+
   const instruccion =
     `Extrae del formulario de recopilación los siguientes campos y devuelve ÚNICAMENTE:\n` +
-    `{ "campos": { "id_campo": "valor", ... } }\n` +
-    `Omite los campos que no encuentres. No inventes datos.\n\n` +
+    `{ "campos": { "id_campo": "valor", ... }` + (hayCronograma ? `, "tablas": { "tablaPrograma": [...] }` : "") + ` }\n` +
+    `Omite los campos que no encuentres. No inventes datos.` + instruccionCronograma + `\n\n` +
     `Campos a extraer:\n${lista}\n\n` +
     `Formulario de recopilación:\n${fuente || "(ver imagen adjunta)"}`;
 
@@ -382,20 +483,8 @@ async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
     content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
   content.push({ type: "text", text: instruccion });
 
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: SYSTEM_PERFIL, messages: [{ role: "user", content }] }),
-  });
-  if (!resp.ok) { const d = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`); }
-  const data = await resp.json();
-  const txt = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-  let jsonStr = txt;
-  const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
-  if (i !== -1 && j !== -1) jsonStr = txt.slice(i, j + 1);
-  let parsed;
-  try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el perfil."); }
-  return { campos: parsed.campos || parsed };
+  const parsed = await llamarJSON(apiKey, SYSTEM_PERFIL, content, 6144, "perfil");
+  return { campos: parsed.campos || {}, tablas: parsed.tablas || {} };
 }
 
 // ── MODO "PROGRAMA" ────────────────────────────────────────────────────────
@@ -450,6 +539,217 @@ async function extraerPrograma({ nombre, sheet_url, datos_crudos, imagen }) {
   let parsed;
   try { parsed = JSON.parse(jsonStr); } catch (e) { throw new Error("La IA no devolvió JSON válido para el programa."); }
   return { campos: parsed.campos || {}, incisos: Array.isArray(parsed.incisos) ? parsed.incisos : [] };
+}
+
+// ── MODO "PROGRAMAS_MULTI" ──────────────────────────────────────────────────
+// Un solo link de Sheets con VARIAS pestañas = varios programas de
+// ordenamiento/planeación a la vez (ej. POEGT/POEL_JALISCO/PMDU en 3 pestañas
+// de un mismo Sheet). A diferencia de "programa" (que asume una hoja de
+// intersección SIGEIA con valores UAB ya resueltos), aquí cada pestaña es un
+// CATÁLOGO de criterios con una columna "Criterio de Aplicabilidad (para IA)"
+// que hay que evaluar contra los datos reales del proyecto — Sí/No/Parcial
+// + justificación, fila por fila, sin omitir ninguna.
+async function extraerProgramasMulti({ sheet_url, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!sheet_url) throw new Error("Pega el link de Google Sheets con los programas de ordenamiento.");
+
+  const tabs = await fetchSheetTabs(sheet_url);
+  if (!tabs.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
+
+  const contexto = ctx(datos || {});
+
+  const programas = await Promise.all(tabs.map(async (tab) => {
+    const instruccion =
+      `${contexto}\n\n` +
+      `Estás evaluando el programa/instrumento "${tab.name}" para este proyecto. La fuente es una ` +
+      "tabla de criterios o estrategias de ordenamiento ecológico/urbano, con una columna que describe " +
+      "CUÁNDO aplica cada fila (columna de aplicabilidad para IA). Evalúa CADA fila contra los datos " +
+      "del proyecto de arriba (giro — estación de servicio/gasolinera —, ubicación, superficie, si está " +
+      "en ANP) y determina si aplica. Si falta un dato del proyecto para decidir con certeza, usa tu " +
+      "mejor juicio como consultor ambiental para una estación de servicio urbana típica y dilo en la " +
+      "justificación (no dejes la fila sin evaluar).\n\n" +
+      "Devuelve ÚNICAMENTE:\n" +
+      "{ \"incisos\": [ { \"criterio\": \"identificador breve de la fila, ej. 'N°3 — Recuperación de " +
+      "especies en riesgo'\", \"aplica\": \"Sí\"|\"No\"|\"Parcial\", \"justificacion\": \"...\" }, ... ], " +
+      "\"estrategias\": [ { \"n\": 1, \"disposicion\": \"Aplica directamente\"|\"Aplica indirectamente\"" +
+      "|\"No aplica\" }, ... ] }\n\n" +
+      "Incluye un inciso por CADA fila de la tabla, sin omitir ninguna — sin límite de filas. Llena " +
+      "\"estrategias\" (usando el N° de la primera columna como \"n\") SOLO si esta pestaña es " +
+      "específicamente el catálogo de las 44 estrategias del POEGT nacional; si no aplica, deja " +
+      "\"estrategias\": [].\n\n" +
+      `Tabla (CSV) de la pestaña "${tab.name}":\n${tab.csv}`;
+
+    try {
+      const r = await llamarJSON(apiKey, SYSTEM_PROGRAMA, [{ type: "text", text: instruccion }], 6144, `programas_multi:${tab.name}`);
+      return {
+        nombre: tab.name,
+        incisos: Array.isArray(r.incisos) ? r.incisos : [],
+        estrategias: Array.isArray(r.estrategias) ? r.estrategias : [],
+      };
+    } catch (e) {
+      console.error(`[programas_multi] falló la pestaña "${tab.name}":`, e.message);
+      return { nombre: tab.name, incisos: [], estrategias: [], error: e.message };
+    }
+  }));
+
+  if (programas.every((p) => p.error && !p.incisos.length)) {
+    throw new Error("La IA no pudo procesar ninguna pestaña del Sheet. Intenta de nuevo.");
+  }
+  return { programas };
+}
+
+// ── MODO "MATRICES" ─────────────────────────────────────────────────────────
+// Lee el Sheet de matrices de impacto (Parámetros/Matriz Leopold/Matriz de
+// Resultados/Balance, en varias pestañas) y deja que la IA DETECTE las
+// categorías de impacto presentes (sin lista fija — puede ser por medio
+// ambiental, por etapa, o como esté agrupada la matriz) para redactar III.5.7
+// por categoría; cada categoría se despliega con su propio recuadro de figura.
+const SYSTEM_MATRICES =
+  "Eres un consultor ambiental senior especializado en evaluación de impacto ambiental (metodología " +
+  "Leopold adaptada + índices Gómez-Orea) para Informes Preventivos ASEA. Lees hojas de cálculo con " +
+  "matrices de impacto ya calculadas y redactas la descripción técnica de los resultados. Escribe en " +
+  "español técnico formal, sin markdown, sin encabezados. No inventes cifras: básate únicamente en los " +
+  "datos de la matriz; si un dato no es determinable, dilo en prosa. Devuelve ÚNICAMENTE JSON válido.";
+
+async function extraerMatrices({ sheet_url, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!sheet_url) throw new Error("Pega el link de Google Sheets de las matrices de impacto.");
+
+  const tabs = await fetchSheetTabs(sheet_url);
+  if (!tabs.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
+
+  // La Matriz de Resultados puede traer cientos de filas; se recorta por
+  // pestaña para no disparar el tamaño/tiempo de la llamada.
+  const MAX_CHARS = 60000;
+  const fuente = tabs
+    .map((t) => {
+      const csv = t.csv.length > MAX_CHARS ? t.csv.slice(0, MAX_CHARS) + "\n[...recortado por longitud...]" : t.csv;
+      return `=== Pestaña: ${t.name} ===\n${csv}`;
+    })
+    .join("\n\n");
+
+  const instruccion =
+    `${ctx(datos || {})}\n\n` +
+    "Analiza estas matrices de impacto ambiental (Leopold adaptada / resultados Gómez-Orea / balance) " +
+    "y DETECTA las categorías de impacto presentes — sin asumir una lista fija: pueden ser por medio " +
+    "ambiental (físico/biótico/socioeconómico), por etapa del proyecto, o como estén agrupados los " +
+    "datos en la matriz misma. Por cada categoría detectada, redacta la descripción narrativa de sus " +
+    "impactos más significativos (acción generadora, factor receptor, magnitud/significancia cuando " +
+    "el dato exista en la matriz), como un ARREGLO de 1 a 3 párrafos (un string por párrafo, sin " +
+    "saltos de línea internos, sin markdown).\n\n" +
+    "Devuelve ÚNICAMENTE:\n" +
+    "{ \"categorias\": [ { \"nombre\": \"nombre de la categoría\", \"narrativa\": [\"párrafo 1\", \"...\"] }, ... ] }\n\n" +
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor de texto — escribe 'pulg' " +
+    "en su lugar; rompe el JSON.\n\n" +
+    `Datos (${tabs.length} pestaña(s)):\n${fuente}`;
+
+  const parsed = await llamarJSON(apiKey, SYSTEM_MATRICES, [{ type: "text", text: instruccion }], 8192, "matrices");
+  const categorias = Array.isArray(parsed.categorias) ? parsed.categorias.filter((c) => c && c.nombre) : [];
+  if (!categorias.length) throw new Error("La IA no detectó categorías de impacto en la matriz.");
+  return { categorias };
+}
+
+// ── MODO "RECEPTORES" ───────────────────────────────────────────────────────
+// Lee el Sheet de receptores sensibles / análisis de cercanía (zonas de
+// amenaza térmica ALOHA de referencia + inventario real de receptores +
+// criterios LCP generales) y devuelve las filas YA en el formato corto que
+// usan las tablas III.4.5 (tablaReceptores / tablaRiesgoReceptores) — el
+// mismo shape que ya lee documento.js, sin pasar por state.tablas.
+const SYSTEM_RECEPTORES =
+  "Eres un consultor ambiental senior que evalúa receptores sensibles y análisis de cercanía para " +
+  "Informes Preventivos ASEA (sector hidrocarburos), conforme a NOM-005-ASEA-2016 §6.1.3 y al Acuerdo " +
+  "DOF 23/02/2017 de Lugares de Concentración Pública (LCP). Escribe en español técnico formal, sin " +
+  "markdown. No inventes receptores ni distancias que no estén en la fuente. Devuelve ÚNICAMENTE JSON válido.";
+
+async function extraerReceptores({ sheet_url, datos_crudos, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${t.csv}`).join("");
+  }
+  if (!fuente.trim()) throw new Error("Pega el link de Google Sheets de receptores sensibles o los datos.");
+
+  const instruccion =
+    `${ctx(datos || {})}\n\n` +
+    "Esta fuente trae el análisis de receptores sensibles: puede incluir zonas de amenaza térmica ALOHA " +
+    "de referencia, un inventario real de receptores con su distancia/zona/cumplimiento, y criterios " +
+    "generales de clasificación LCP. Devuelve DOS tablas:\n\n" +
+    "1) \"tablaReceptores\": UN registro por cada receptor sensible que aparezca en el inventario de la " +
+    "fuente — no inventes receptores que no estén ahí. Columnas: {\"no\": consecutivo, \"tipo\": tipo de " +
+    "receptor, \"nombre\": nombre/descripción, \"dist\": distancia al predio en metros (solo número), " +
+    "\"dir\": dirección cardinal si la fuente la trae (si no, \"\"), \"pob\": capacidad/población si la " +
+    "fuente la trae (si no, \"\"), \"obs\": zona de amenaza térmica correspondiente + si cumple la " +
+    "distancia mínima requerida}.\n\n" +
+    "2) \"tablaRiesgoReceptores\": evaluación de riesgo por PARÁMETRO ambiental relevante para receptores " +
+    "sensibles (COV/vapores del SRV, ruido operacional, derrame accidental de hidrocarburos — no una fila " +
+    "por receptor, sino una fila por parámetro). Columnas: {\"receptor\": el receptor más cercano/sensible " +
+    "relevante para ese parámetro, \"parametro\": nombre del parámetro, \"nivel\": \"Bajo\"|\"Bajo-Medio\"|" +
+    "\"Medio\"|\"Alto\", \"justif\": justificación breve citando distancia y criterio aplicable}.\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"tablaReceptores\": [...], \"tablaRiesgoReceptores\": [...] }\n\n" +
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su lugar; " +
+    "rompe el JSON.\n\n" +
+    `Fuente:\n${fuente}`;
+
+  const parsed = await llamarJSON(apiKey, SYSTEM_RECEPTORES, [{ type: "text", text: instruccion }], 6144, "receptores");
+  return {
+    tablaReceptores: Array.isArray(parsed.tablaReceptores) ? parsed.tablaReceptores : [],
+    tablaRiesgoReceptores: Array.isArray(parsed.tablaRiesgoReceptores) ? parsed.tablaRiesgoReceptores : [],
+  };
+}
+
+// ── MODO "VIGENCIAS" ────────────────────────────────────────────────────────
+// Lee el Sheet de vigencias documentales (permisos/dictámenes: estatus, folio,
+// autoridad, emisión, vencimiento, prioridad, texto sugerido para el IP) y
+// devuelve dos cosas: la tabla de evidencia tal cual (para el capítulo VI,
+// mismo shape "tablaIA" que usa tK/tRows) y los compromisos que se derivan de
+// los documentos vencidos/pendientes (para V.8, shape corto de esa tabla).
+const SYSTEM_VIGENCIAS =
+  "Eres un consultor ambiental senior que revisa el expediente documental (permisos, dictámenes, " +
+  "registros) de una estación de servicio para un Informe Preventivo ASEA. Escribe en español técnico " +
+  "formal, sin markdown. No inventes folios ni fechas que no estén en la fuente. Devuelve ÚNICAMENTE JSON válido.";
+
+async function extraerVigencias({ sheet_url, datos_crudos, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${t.csv}`).join("");
+  }
+  if (!fuente.trim()) throw new Error("Pega el link de Google Sheets de vigencias o los datos.");
+
+  const instruccion =
+    `${ctx(datos || {})}\n\n` +
+    "Esta fuente trae el expediente documental del proyecto: por cada documento/trámite, su estatus, " +
+    "folio, autoridad, fecha de emisión, fecha de vencimiento, prioridad y (si la fuente la trae) un " +
+    "texto ya redactado sugerido para el IP. Devuelve DOS cosas:\n\n" +
+    "1) \"tablaVigencias\": UN registro por cada documento de la fuente (no omitas ninguno), con estas " +
+    "claves EXACTAS: { \"Documento\": \"...\", \"Estatus\": \"...\", \"Folio\": \"...\", \"Autoridad\": " +
+    "\"...\", \"Emisión\": \"fecha o 'No aplica'\", \"Vencimiento\": \"fecha o 'Permanente'\", " +
+    "\"Prioridad\": \"BAJA\"|\"MEDIA\"|\"ALTA\" }.\n\n" +
+    "2) \"compromisos\": SOLO para los documentos cuyo estatus indique una acción pendiente (vencido, " +
+    "próximo a vencer, no existe, en elaboración, pendiente de confirmar/renovar — NO para los ya " +
+    "vigentes), un compromiso por documento con estas claves: { \"compromiso\": usa tal cual el texto " +
+    "sugerido para el IP de la fuente si existe, o redáctalo tú brevemente si no; \"etapa\": " +
+    "\"Operación\" (son trámites de operación vigente, salvo que la fuente indique otra etapa); " +
+    "\"normativa\": la norma/instrumento asociado si es identificable del nombre del documento o del " +
+    "texto sugerido, si no \"\" }.\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"tablaVigencias\": [...], \"compromisos\": [...] }\n\n" +
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su " +
+    "lugar; rompe el JSON.\n\n" +
+    `Fuente:\n${fuente}`;
+
+  const parsed = await llamarJSON(apiKey, SYSTEM_VIGENCIAS, [{ type: "text", text: instruccion }], 8192, "vigencias");
+  return {
+    tablaVigencias: Array.isArray(parsed.tablaVigencias) ? parsed.tablaVigencias : [],
+    compromisos: Array.isArray(parsed.compromisos) ? parsed.compromisos : [],
+  };
 }
 
 // ── MODO "PLANO" ───────────────────────────────────────────────────────────
@@ -701,6 +1001,26 @@ module.exports = async (req, res) => {
       res.status(200).json({ ok: true, ...out });
       return;
     }
+    if (body.accion === "programas_multi") {
+      const out = await extraerProgramasMulti(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
+    if (body.accion === "matrices") {
+      const out = await extraerMatrices(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
+    if (body.accion === "receptores") {
+      const out = await extraerReceptores(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
+    if (body.accion === "vigencias") {
+      const out = await extraerVigencias(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
     if (body.accion === "plano") {
       const out = await interpretarPlano(body);
       res.status(200).json({ ok: true, ...out });
@@ -718,5 +1038,10 @@ module.exports.redactarSeccion = redactarSeccion;
 module.exports.estructurarTabla = estructurarTabla;
 module.exports.extraerPerfil = extraerPerfil;
 module.exports.extraerPrograma = extraerPrograma;
+module.exports.extraerProgramasMulti = extraerProgramasMulti;
+module.exports.extraerMatrices = extraerMatrices;
+module.exports.extraerReceptores = extraerReceptores;
+module.exports.extraerVigencias = extraerVigencias;
 module.exports.interpretarPlano = interpretarPlano;
 module.exports.limpiarMarkdown = limpiarMarkdown;
+module.exports.fetchSheetTabs = fetchSheetTabs;

@@ -175,13 +175,24 @@
     // Programas de ordenamiento adicionales ligados al proyecto (más allá del
     // POEGT nacional de arriba): uno por cada uno agregado en el desplegable
     // de II.2 — no hay número fijo, depende de lo que el proyecto tenga.
+    // Numeración II.9.x: II.2–II.8 ya están tomadas por las tablas fijas de
+    // arriba (UAB, políticas, estrategias, UGA estatal, criterios, plan
+    // municipal, POEL) — este bloque solo agrega lo que sobre.
     (state.programas || []).forEach((p, i) => {
       H(4, "II.2.1." + (i + 1) + " " + (p.nombre || "Programa de ordenamiento"));
       if (p.url) I("Fuente: " + p.url);
-      const rows = (p.incisos || []).map(x => [x.campo || "", x.valor || ""]);
-      TBL({ title: "Tabla II.4." + (i + 1) + ". Vinculación con " + (p.nombre || "el programa"),
-            head: ["Campo", "Valor"], k: rows.length ? "auto" : "scaffold",
-            rows: rows.length ? rows : [["", ""]] });
+      const esCriterios = (p.incisos || []).some(x => x.aplica !== undefined);
+      if (esCriterios) {
+        const rows = p.incisos.map(x => [x.criterio || "", x.aplica || "", x.justificacion || ""]);
+        TBL({ title: "Tabla II.9." + (i + 1) + ". Evaluación de criterios de aplicabilidad — " + (p.nombre || "el programa"),
+              head: ["Criterio", "Aplica", "Justificación"], k: rows.length ? "auto" : "scaffold",
+              rows: rows.length ? rows : [["", "", ""]] });
+      } else {
+        const rows = (p.incisos || []).map(x => [x.campo || "", x.valor || ""]);
+        TBL({ title: "Tabla II.9." + (i + 1) + ". Vinculación con " + (p.nombre || "el programa"),
+              head: ["Campo", "Valor"], k: rows.length ? "auto" : "scaffold",
+              rows: rows.length ? rows : [["", ""]] });
+      }
     });
 
     H(4, "II.2.2 Plan Nacional de Desarrollo");
@@ -527,7 +538,21 @@
             k:(tis&&tis.some(r=>r.codigo||r.isig))?"auto":"scaffold",
             rows:(tis&&tis.length)?tis.map(r=>[r.codigo||"",r.accion||"",r.factor||"",r.m||"",r.e||"",r.d||"",r.r||"",r.p||"",r.a||"",r.s||"",r.isig||"",r.semaforo||"",r.desc||""]):empty(6,13) }); }
     H(4, "III.5.7 Descripción de impactos");
-    I("Identificar y describir los impactos más significativos (narrativa técnica de los “altos” y “medios” + medidas) por medio físico, biológico y socioeconómico, incluyendo riesgo tecnológico.");
+    // Categorías dinámicas leídas de la matriz (state.impactoCategorias, vía
+    // "Leer matriz con IA") — sin lista fija; cada una con su propia figura
+    // (catimg_i, fusionada en D.AREAS por areasDinamicas()/todasLasAreas() en
+    // app.js). Si no se usó esa función, se conserva la guía ✎ genérica.
+    if (Array.isArray(state.impactoCategorias) && state.impactoCategorias.length) {
+      state.impactoCategorias.forEach((c, i) => {
+        H(5, c.nombre || ("Categoría " + (i + 1)));
+        const parrafos = Array.isArray(c.narrativa) ? c.narrativa : (c.narrativa ? [c.narrativa] : []);
+        if (parrafos.length) parrafos.forEach((p) => P(p));
+        else I("Sin narrativa generada para esta categoría — complétala manualmente.");
+        FIGAREA("catimg_" + i);
+      });
+    } else {
+      I("Identificar y describir los impactos más significativos (narrativa técnica de los “altos” y “medios” + medidas) por medio físico, biológico y socioeconómico, incluyendo riesgo tecnológico.");
+    }
     H(4, "III.5.8 Balance de impacto");
     I("Balance total del escenario: sumatoria neta por medio y por fase, y número de impactos por clase.");
     { var tib=state.tablaImpactosBalance;
@@ -743,6 +768,17 @@
     if (((ctx.figsByArea && ctx.figsByArea["anexo"]) || []).length) {
       H(3, "Anexo fotográfico y de cartografía adicional");
       FIGAREA("anexo");
+    }
+
+    // Vigencias y compromisos documentales (state.tablas.tablaVigencias,
+    // llenado desde "Leer vigencias y compromisos (IA)") — evidencia de qué
+    // permisos/dictámenes están vigentes, vencidos o pendientes.
+    if (tFilled("tablaVigencias")) {
+      H(3, "Vigencias y compromisos documentales");
+      I("Evidencia de trámites, permisos y dictámenes del proyecto: estatus, folio, autoridad, vigencia y prioridad de atención.");
+      var HVIG=["Documento","Estatus","Folio","Autoridad","Emisión","Vencimiento","Prioridad"];
+      TBL({ title:"Tabla — Vigencias y compromisos documentales",
+            head:HVIG, k:"auto", rows: tRows("tablaVigencias",HVIG,1) });
     }
 
     H(2, "Referencias");

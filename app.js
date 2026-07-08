@@ -81,6 +81,7 @@
       state.instrumentos=D.INSTRUMENTOS.map(i=>({sel:i.sel}));
     if(!Array.isArray(state.puntos)) state.puntos=[{x:"",y:""},{x:"",y:""},{x:"",y:""},{x:"",y:""}];
     if(!Array.isArray(state.programas)) state.programas=[];
+    if(!Array.isArray(state.impactoCategorias)) state.impactoCategorias=[];
     if(!state.figuras || typeof state.figuras!=="object") state.figuras={};
     if(!state.checklist || typeof state.checklist!=="object") state.checklist={};
     if(!state.anexos || typeof state.anexos!=="object") state.anexos={};
@@ -122,8 +123,18 @@
     if(!Array.isArray(state.tablaCriteriosCierre))  state.tablaCriteriosCierre=D.CRITERIOS_CIERRE_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaAvisosCierre))     state.tablaAvisosCierre=D.AVISOS_CIERRE_DEFAULT.map(r=>({...r}));
     if(!Array.isArray(state.tablaCronogramaCierre)) state.tablaCronogramaCierre=D.CRONOGRAMA_CIERRE_DEFAULT.map(r=>({...r}));
-    D.AREAS.forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
+    todasLasAreas().forEach(a=>{ if(!Array.isArray(state.figuras[a.id])) state.figuras[a.id]=(a.defaults||[]).map((t,i)=>({id:a.id+"_"+i, titulo:t})); });
   }
+
+  // III.5: un área de imagen POR CATEGORÍA de impacto detectada (state.impactoCategorias,
+  // llenado por "Leer matriz de impactos (IA)") — se fusiona con el catálogo fijo D.AREAS
+  // en vez de mutarlo, porque las categorías cambian por proyecto.
+  function areasDinamicas(){
+    const cats = state.impactoCategorias;
+    if(!Array.isArray(cats) || !cats.length) return [];
+    return cats.map((c,i)=>({ id:"catimg_"+i, sec:"III5", defaults:[(c.nombre||("Categoría "+(i+1)))+" — impacto"] }));
+  }
+  function todasLasAreas(){ return (D.AREAS||[]).concat(areasDinamicas()); }
   let _liveT=null;
   function programarLive(){ clearTimeout(_liveT); _liveT=setTimeout(()=>{ try{ renderLiveDoc(); }catch(e){} }, 280); }
 
@@ -370,6 +381,8 @@
       {id:"patrimonioINAH", l:"III.4.4f Patrimonio cultural y arqueología (fuente: INAH)", tipo:"text", b:"cerrada",
         hint:"Ej: 'No existen zonas arqueológicas federales dentro del AI (fuente: INAH, consulta 2025)'"},
       // III.4.5 Receptores sensibles (radio ≤ 2 km)
+      {id:"receptoresIA", l:"Llenar receptores desde el Sheet (IA)", tipo:"receptoresIA", b:"boiler",
+        nota:"Pega el link de Google Sheets de receptores sensibles / análisis de cercanía (zonas ALOHA, inventario, criterios LCP). La IA llena las 2 tablas de abajo — reemplaza lo que ya tengan."},
       {id:"tablaReceptores", l:"III.4.5 Receptores sensibles dentro del AI (radio ≤ 2 km)", tipo:"susDinamica", b:"cerrada",
         nota:"Llenar desde trabajo de campo o Google Maps: escuelas, viviendas, hospitales, etc. dentro de 2 km del predio.",
         cols:[
@@ -396,6 +409,8 @@
 
     { id:"III5", grp:"III. Aspectos técnicos", titulo:"III.5 Identificación de impactos", desc:"Metodología Leopold + Gómez-Orea incluida automáticamente. Llena tablas de resumen/balance tras construir la matriz.", fields:[
       {id:"incluirMetodo", l:"Incluir metodología y tablas de criterios/escalas (boilerplate)", tipo:"check", b:"boiler", def:true},
+      {id:"derivarAcciones", l:"Derivar acciones desde el Programa de Trabajo (III.1.6)", tipo:"derivarAcciones", b:"boiler",
+        nota:"Usa las actividades ya capturadas en III.1.6 (plano PDF, cronograma de recopilación o carga manual) para REEMPLAZAR el catálogo de acciones de abajo, agrupadas por etapa. Revísalo y edítalo después — no se puede deshacer."},
       {id:"tablaAccionesProyecto", l:"III.5.3 Acciones del proyecto (catálogo para la matriz de Leopold)", tipo:"susDinamica", b:"cerrada",
         nota:"27 acciones por fase (C01–C10 construcción, O01–O10 operación, A01–A07 abandono). Pre-llenadas con valores típicos de gasolinera — edita parámetros y frecuencias según el proyecto.",
         cols:[
@@ -407,6 +422,8 @@
         ]},
       {id:"iaImpactos", l:"III.5.7/5.8 Descripción de impactos y balance — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
         nota:"Genera la narrativa de impactos altos/medios y el balance neto por medio con IA (Leopold/Gómez-Orea). Editable."},
+      {id:"matrizImpactos", l:"III.5.7 Leer matriz de impactos (IA) — categorías dinámicas", tipo:"matrizImpactos", b:"abierta",
+        nota:"Pega el link de Google Sheets de las matrices (Leopold/Resultados/Balance, puede tener varias pestañas). La IA detecta las categorías de impacto presentes — sin lista fija — y redacta III.5.7 por categoría, cada una con su propio recuadro de figura. Reemplaza la narrativa genérica de arriba si la usas."},
       {id:"tablaImpactosResumen", l:"Tabla III.25 — Resumen de impactos por etapa", tipo:"susDinamica", b:"cerrada",
         nota:"Llenar después de completar la matriz de Leopold (figura f31). Valores: conteo de impactos por signo.",
         cols:[
@@ -576,7 +593,10 @@
       {id:"incluirConclusion", l:"Incluir sección V completa en el documento", tipo:"check", b:"boiler", def:true}
     ]},
 
-    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:'Plano general y figuras adicionales (anexo fotográfico). Usa "+ Agregar imagen".', fields:[] }
+    { id:"anexos", grp:"VI. Anexos", titulo:"VI. Planos y anexos", desc:'Plano general y figuras adicionales (anexo fotográfico). Usa "+ Agregar imagen".', fields:[
+      {id:"vigenciasIA", l:"Leer vigencias y compromisos (IA)", tipo:"vigenciasIA", b:"boiler",
+        nota:"Pega el link de Google Sheets de vigencias documentales (permisos/dictámenes: estatus, folio, emisión, vencimiento, prioridad). La IA arma la tabla de evidencia para este capítulo y agrega los compromisos de los documentos vencidos/pendientes a la Tabla V.8 (sin borrar los que ya tengas)."}
+    ] }
   ];
 
   // Lista de campos cerrados/boiler que cuentan para el progreso
@@ -627,7 +647,7 @@
   // Numeración automática de figuras en orden de documento (respeta toggles)
   function numerarFiguras(){
     const figs=state.figuras||{}; const out={}; let n=0;
-    for(const a of D.AREAS){
+    for(const a of todasLasAreas()){
       const list=figs[a.id]||[];
       const gatedOff = a.gatedBy && state[a.gatedBy]===false;
       out[a.id]=list.map(f=>({ id:f.id, titulo:f.titulo,
@@ -641,7 +661,7 @@
     let tocHtml="", lastGrp="", formHtml="";
     const figMap = numerarFiguras();
     const areasBySec = {};
-    D.AREAS.forEach(a=>{ (areasBySec[a.sec]=areasBySec[a.sec]||[]).push(a); });
+    todasLasAreas().forEach(a=>{ (areasBySec[a.sec]=areasBySec[a.sec]||[]).push(a); });
     SECTIONS.forEach(sec=>{
       if(sec.grp!==lastGrp){ tocHtml+=`<div class="grp">${esc(sec.grp)}</div>`; lastGrp=sec.grp; }
       const st=seccionStatus(sec);
@@ -664,6 +684,10 @@
     bindImportar();
     bindProgramas();
     bindPlano();
+    bindDerivarAcciones();
+    bindMatrizImpactos();
+    bindReceptoresIA();
+    bindVigenciasIA();
     setupScrollSpy();
     updateProgress();
     programarLive();
@@ -699,8 +723,15 @@
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const c=j.campos||{}; let n=0;
         Object.keys(c).forEach(k=>{ const v=c[k]; if(v!==undefined && v!==null && String(v).trim()!==""){ state[k]=v; n++; } });
+        // Si la recopilación traía pestaña de Cronograma, ya viene lista para
+        // III.1.6 (mismo state.tablas.tablaPrograma que usa el plano/PDF).
+        let nTablas=0;
+        if(!state.tablas) state.tablas={};
+        Object.keys(j.tablas||{}).forEach(k=>{
+          if(Array.isArray(j.tablas[k]) && j.tablas[k].length){ state.tablas[k]=j.tablas[k]; nTablas++; }
+        });
         save(); renderForm();
-        toast(n?("✓ "+n+" campos autollenados — verifícalos"):"No se encontraron campos en la recopilación");
+        toast(n||nTablas?("✓ "+n+" campos autollenados"+(nTablas?" + cronograma cargado en III.1.6":"")+" — verifícalos"):"No se encontraron campos en la recopilación");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al importar: "+e.message); }
     };
   }
@@ -723,6 +754,40 @@
     });
     const img=document.querySelector("input[type=file][data-prog-img]");
     if(img) img.onchange=()=>{ const f=img.files[0]; const l=document.querySelector("[data-prog-imgname]"); if(l) l.textContent=f?("📷 "+f.name):""; };
+
+    const btnMulti=document.querySelector("[data-prog-multi-btn]");
+    if(btnMulti) btnMulti.onclick=async()=>{
+      const url=(document.querySelector("[data-prog-multi-url]")||{}).value||"";
+      const status=document.querySelector("[data-prog-multi-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets"); return; }
+      const sup=g("superficie","");
+      const datos={
+        nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado",""),
+        ubicacion:[g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+        superficie: sup?(sup+" m²"):"", en_anp:false
+      };
+      btnMulti.disabled=true; const prevM=btnMulti.textContent; btnMulti.textContent="Leyendo pestañas…";
+      if(status) status.textContent=" Enumerando pestañas y evaluando criterios con IA — puede tardar…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"programas_multi", sheet_url:url.trim(), datos})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const programas=j.programas||[];
+        if(!programas.length){ throw new Error("No se encontraron pestañas en ese link"); }
+        if(!state.programas) state.programas=[];
+        let nEstr=0;
+        programas.forEach(p=>{
+          state.programas.push({ nombre:p.nombre||"(sin nombre)", url:url.trim(), incisos:p.incisos||[] });
+          (p.estrategias||[]).forEach(e=>{
+            const idx=(D.ESTRATEGIAS_POEGT||[]).findIndex(es=>String(es.n)===String(e.n));
+            if(idx>=0 && e.disposicion){ state.estrategias[idx]={n:D.ESTRATEGIAS_POEGT[idx].n, d:e.disposicion}; nEstr++; }
+          });
+        });
+        save(); renderForm();
+        toast("✓ "+programas.length+" programa(s) agregados desde "+programas.length+" pestaña(s)"+(nEstr?` — ${nEstr} estrategias POEGT actualizadas`:""));
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btnMulti.disabled=false; btnMulti.textContent=prevM; toast("Error al leer las pestañas: "+e.message); }
+    };
+
     const btn=document.querySelector("[data-prog-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const nombre=(document.querySelector("[data-prog-nombre]")||{}).value||"";
@@ -820,6 +885,131 @@
         }
       };
     });
+  }
+
+  // Deriva el catálogo de acciones de III.5.3 desde el Programa de trabajo de
+  // III.1.6 (state.tablas.tablaPrograma) — reemplaza el catálogo genérico.
+  function bindDerivarAcciones(){
+    const btn=document.querySelector("[data-derivar-acciones-btn]"); if(!btn) return;
+    btn.onclick=()=>{
+      const programa=(state.tablas && state.tablas.tablaPrograma)||[];
+      const status=document.querySelector("[data-derivar-acciones-status]");
+      if(!programa.length){ toast("Primero llena el Programa de trabajo en III.1.6 (plano, cronograma o carga manual)"); return; }
+      const PREFIJO={ "Preparación y construcción":"C", "Preparación":"C", "Construcción":"C", "Operación":"O", "Abandono":"A" };
+      const contador={};
+      const nuevas=programa.map(r=>{
+        const etapa=r["Etapa"]||r.etapa||"";
+        const pref=PREFIJO[etapa]||"X";
+        contador[pref]=(contador[pref]||0)+1;
+        const codigo=pref+String(contador[pref]).padStart(2,"0");
+        const periodo=r["Periodo estimado"]||r.periodo||"";
+        const duracion=r["Duración"]||r.duracion||"";
+        return { codigo, etapa, accion:r["Actividad"]||r.actividad||"", desc:"",
+          params:[periodo,duracion].filter(Boolean).join(" — ") };
+      });
+      state.tablaAccionesProyecto=nuevas;
+      save(); renderForm();
+      if(status) status.textContent="";
+      toast("✓ "+nuevas.length+" acciones derivadas del programa de trabajo — revísalas en III.5.3");
+    };
+  }
+
+  // III.5.7: lee el link de matrices, detecta categorías con IA y llena
+  // state.impactoCategorias — cada categoría genera su propio recuadro de
+  // figura vía areasDinamicas()/todasLasAreas().
+  function bindMatrizImpactos(){
+    const btn=document.querySelector("[data-matriz-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const url=(document.querySelector("[data-matriz-url]")||{}).value||"";
+      const status=document.querySelector("[data-matriz-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets de las matrices"); return; }
+      const sup=g("superficie","");
+      const datos={
+        nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado",""),
+        ubicacion:[g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+        superficie: sup?(sup+" m²"):"", en_anp:false
+      };
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo matriz…";
+      if(status) status.textContent=" Leyendo pestañas y detectando categorías con IA — puede tardar…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"matrices", sheet_url:url.trim(), datos})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const categorias=j.categorias||[];
+        if(!categorias.length){ throw new Error("La IA no detectó categorías en la matriz"); }
+        state.impactoCategorias=categorias;
+        save(); renderForm();
+        toast("✓ "+categorias.length+" categoría(s) de impacto detectadas — revísalas en III.5.7");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer la matriz: "+e.message); }
+    };
+  }
+
+  // III.4.5: lee el Sheet de receptores y llena directo state.tablaReceptores
+  // / state.tablaRiesgoReceptores (formato corto, ya listo para documento.js).
+  function bindReceptoresIA(){
+    const btn=document.querySelector("[data-receptores-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const url=(document.querySelector("[data-receptores-url]")||{}).value||"";
+      const status=document.querySelector("[data-receptores-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets de receptores"); return; }
+      const sup=g("superficie","");
+      const datos={
+        nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado",""),
+        ubicacion:[g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+        superficie: sup?(sup+" m²"):"", en_anp:false
+      };
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…";
+      if(status) status.textContent=" Leyendo receptores y evaluando riesgo con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"receptores", sheet_url:url.trim(), datos})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const tr=j.tablaReceptores||[], trr=j.tablaRiesgoReceptores||[];
+        if(!tr.length && !trr.length){ throw new Error("La IA no encontró receptores en ese Sheet"); }
+        if(tr.length) state.tablaReceptores=tr;
+        if(trr.length) state.tablaRiesgoReceptores=trr;
+        save(); renderForm();
+        toast("✓ "+tr.length+" receptor(es) + "+trr.length+" evaluación(es) de riesgo cargados en III.4.5");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer receptores: "+e.message); }
+    };
+  }
+
+  // Capítulo VI: llena state.tablas.tablaVigencias (formato tablaIA, la lee
+  // documento.js con tK/tRows) y AGREGA (sin borrar lo existente) los
+  // compromisos derivados a la Tabla V.8 (state.tablaCompromisosFinales).
+  function bindVigenciasIA(){
+    const btn=document.querySelector("[data-vigencias-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const url=(document.querySelector("[data-vigencias-url]")||{}).value||"";
+      const status=document.querySelector("[data-vigencias-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets de vigencias"); return; }
+      const sup=g("superficie","");
+      const datos={
+        nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado",""),
+        ubicacion:[g("calle",""),g("colonia",""),g("municipio",""),g("estado","")].filter(Boolean).join(", "),
+        superficie: sup?(sup+" m²"):"", en_anp:false
+      };
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…";
+      if(status) status.textContent=" Leyendo vigencias y derivando compromisos con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"vigencias", sheet_url:url.trim(), datos})});
+        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const tv=j.tablaVigencias||[], comp=j.compromisos||[];
+        if(!tv.length && !comp.length){ throw new Error("La IA no encontró documentos en ese Sheet"); }
+        if(tv.length){ if(!state.tablas) state.tablas={}; state.tablas.tablaVigencias=tv; }
+        if(comp.length){
+          if(!Array.isArray(state.tablaCompromisosFinales)) state.tablaCompromisosFinales=[];
+          let maxNum=state.tablaCompromisosFinales.reduce((m,r)=>Math.max(m, parseInt(r.num,10)||0), 0);
+          comp.forEach(c=>{
+            maxNum++;
+            state.tablaCompromisosFinales.push({ num:String(maxNum), compromiso:c.compromiso||"", etapa:c.etapa||"Operación", normativa:c.normativa||"" });
+          });
+        }
+        save(); renderForm();
+        toast("✓ "+tv.length+" documento(s) cargados"+(comp.length?` + ${comp.length} compromiso(s) agregados a V.8`:""));
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer vigencias: "+e.message); }
+    };
   }
 
   // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
@@ -1028,6 +1218,10 @@
       case "instrumentos": return renderInstrumentos(f);
       case "programas": return renderProgramas(f);
       case "plano": return renderPlano(f);
+      case "derivarAcciones": return renderDerivarAcciones(f);
+      case "matrizImpactos": return renderMatrizImpactos(f);
+      case "receptoresIA": return renderReceptoresIA(f);
+      case "vigenciasIA": return renderVigenciasIA(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
       case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
         `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
@@ -1150,22 +1344,40 @@
     const list = state.programas || [];
     const note = f.nota ? `<div class="open-note" style="margin-bottom:8px">${esc(f.nota)}</div>` : "";
     const cards = list.map((p,i)=>{
-      const incisos = (p.incisos||[]).map(x=>
-        `<tr><td style="padding:4px 6px;border:1px solid var(--linea);font-weight:600">${esc(x.campo||"")}</td><td style="padding:4px 6px;border:1px solid var(--linea)">${esc(x.valor||"")}</td></tr>`
-      ).join("") || `<tr><td colspan="2" style="padding:8px;color:var(--gris);font-style:italic;text-align:center">Sin incisos extraídos</td></tr>`;
+      const esCriterios = (p.incisos||[]).some(x=>x.aplica!==undefined);
+      const filas = esCriterios
+        ? ((p.incisos||[]).map(x=>{
+            const color = x.aplica==="Sí" ? "#0f6b46" : (x.aplica==="Parcial" ? "#b8860b" : "#888");
+            return `<tr><td style="padding:4px 6px;border:1px solid var(--linea)">${esc(x.criterio||"")}</td><td style="padding:4px 6px;border:1px solid var(--linea);font-weight:600;color:${color}">${esc(x.aplica||"")}</td><td style="padding:4px 6px;border:1px solid var(--linea)">${esc(x.justificacion||"")}</td></tr>`;
+          }).join("") || `<tr><td colspan="3" style="padding:8px;color:var(--gris);font-style:italic;text-align:center">Sin criterios evaluados</td></tr>`)
+        : ((p.incisos||[]).map(x=>
+            `<tr><td style="padding:4px 6px;border:1px solid var(--linea);font-weight:600">${esc(x.campo||"")}</td><td style="padding:4px 6px;border:1px solid var(--linea)">${esc(x.valor||"")}</td></tr>`
+          ).join("") || `<tr><td colspan="2" style="padding:8px;color:var(--gris);font-style:italic;text-align:center">Sin incisos extraídos</td></tr>`);
       const linkHtml = p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" style="color:var(--verde)">${esc(p.url)}</a>` : "<i>(sin link)</i>";
       return `<details class="prog-card" style="border:1px solid var(--linea);border-radius:8px;margin-bottom:8px;padding:8px 10px">
         <summary style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">
           <span><b>${esc(p.nombre||"(sin nombre)")}</b> — <span style="font-size:12.5px;color:var(--gris)">${linkHtml}</span></span>
           <button type="button" class="prog-del" data-prog-del="${i}" title="Eliminar programa" style="border:none;background:transparent;color:#b3261e;cursor:pointer;font-size:15px;padding:2px 6px">×</button>
         </summary>
-        <div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">${incisos}</table></div>
+        <div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">${filas}</table></div>
       </details>`;
     }).join("") || `<div style="padding:10px;color:var(--gris);font-size:12.5px;font-style:italic">Sin programas agregados todavía.</div>`;
 
     return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
       <div data-prog-list>${cards}</div>
+
       <div class="prog-add" style="margin-top:8px;padding:10px;border:1px dashed var(--linea);border-radius:8px">
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">📑 Leer TODAS las pestañas de un link (un programa por pestaña)</div>
+        <div style="font-size:11.5px;color:var(--gris);margin-bottom:6px">Si el Sheet tiene varias pestañas (ej. POEGT, POEL, PMDU), cada una se agrega como su propio programa — la IA evalúa cada fila de criterios contra los datos del proyecto.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input data-prog-multi-url placeholder="Link de Google Sheets (con N pestañas)" style="flex:1;min-width:220px">
+          <button type="button" class="ia-btn" data-prog-multi-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📑 Leer todas las pestañas</button>
+        </div>
+        <span class="ia-status" data-prog-multi-status style="font-size:13px;color:var(--muted,#888)"></span>
+      </div>
+
+      <div class="prog-add" style="margin-top:8px;padding:10px;border:1px dashed var(--linea);border-radius:8px">
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">O agrega un programa a la vez</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
           <input data-prog-nombre placeholder="Nombre del programa (ej. POEGT, POE Estatal, POEL Puerto Vallarta)" style="flex:1;min-width:220px">
           <input data-prog-url placeholder="Link de Google Sheets del programa" style="flex:1;min-width:220px">
@@ -1195,6 +1407,69 @@
         <button type="button" class="ia-btn" data-plano-btn="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">🏗️ Interpretar plano con IA</button>
         <span class="ia-status" data-plano-status="${esc(f.id)}" style="font-size:13px;color:var(--muted,#888)"></span>
       </div>
+    </div>`;
+  }
+
+  // III.5.3: convierte el Programa de trabajo (state.tablas.tablaPrograma,
+  // llenado desde el plano PDF o el cronograma de recopilación en III.1.6) en
+  // el catálogo de acciones que usa la matriz de Leopold — en vez de dejar los
+  // 27 valores genéricos de ejemplo.
+  function renderDerivarAcciones(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const n = (state.tablas && state.tablas.tablaPrograma && state.tablas.tablaPrograma.length) || 0;
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+        <button type="button" class="ia-btn" data-derivar-acciones-btn style="background:#0e3b29;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">⇩ Derivar acciones (${n} actividad${n===1?"":"es"} en III.1.6)</button>
+        <span class="ia-status" data-derivar-acciones-status style="font-size:13px;color:var(--muted,#888)"></span>
+      </div>
+    </div>`;
+  }
+
+  // III.5.7: categorías de impacto dinámicas leídas de la matriz — sin lista
+  // fija. Cada categoría detectada obtiene su propio recuadro de figura
+  // (state.impactoCategorias, ver areasDinamicas()/todasLasAreas()).
+  function renderMatrizImpactos(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const cats = state.impactoCategorias||[];
+    const resumen = cats.length
+      ? `<div style="margin-top:6px;font-size:12.5px">✓ ${cats.length} categoría${cats.length===1?"":"s"} detectada${cats.length===1?"":"s"}: ${cats.map(c=>esc(c.nombre||"")).join(", ")}</div>`
+      : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <input data-matriz-url placeholder="Link de Google Sheets de las matrices de impacto" style="flex:1;min-width:220px">
+        <button type="button" class="ia-btn" data-matriz-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">🧩 Leer matriz con IA</button>
+      </div>
+      <span class="ia-status" data-matriz-status style="font-size:13px;color:var(--muted,#888)"></span>
+      ${resumen}
+    </div>`;
+  }
+
+  // III.4.5: llena tablaReceptores/tablaRiesgoReceptores (formato corto, las
+  // mismas susDinamica de siempre) desde el Sheet de receptores sensibles.
+  function renderReceptoresIA(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <input data-receptores-url placeholder="Link de Google Sheets de receptores sensibles" style="flex:1;min-width:220px">
+        <button type="button" class="ia-btn" data-receptores-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📍 Llenar receptores con IA</button>
+      </div>
+      <span class="ia-status" data-receptores-status style="font-size:13px;color:var(--muted,#888)"></span>
+    </div>`;
+  }
+
+  // Capítulo VI: tabla de vigencias documentales + compromisos derivados
+  // (agregados, sin pisar los manuales, a la Tabla V.8).
+  function renderVigenciasIA(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const n = (state.tablas && state.tablas.tablaVigencias && state.tablas.tablaVigencias.length) || 0;
+    const resumen = n ? `<div style="margin-top:6px;font-size:12.5px">✓ ${n} documento(s) cargados</div>` : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <input data-vigencias-url placeholder="Link de Google Sheets de vigencias documentales" style="flex:1;min-width:220px">
+        <button type="button" class="ia-btn" data-vigencias-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📋 Leer vigencias con IA</button>
+      </div>
+      <span class="ia-status" data-vigencias-status style="font-size:13px;color:var(--muted,#888)"></span>
+      ${resumen}
     </div>`;
   }
 
