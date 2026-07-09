@@ -732,6 +732,8 @@
   function bindImportar(){
     const img=document.querySelector("input[type=file][data-imp-img]");
     if(img) img.onchange=()=>{ const f=img.files[0]; const l=document.querySelector("[data-imp-imgname]"); if(l) l.textContent=f?("📷 "+f.name):""; };
+    const urlInp=document.querySelector("[data-imp-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("recopilacion", urlInp.value);
     const btn=document.querySelector("[data-imp-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const txt=(document.querySelector("[data-imp-txt]")||{}).value||"";
@@ -780,6 +782,8 @@
     });
     const img=document.querySelector("input[type=file][data-prog-img]");
     if(img) img.onchange=()=>{ const f=img.files[0]; const l=document.querySelector("[data-prog-imgname]"); if(l) l.textContent=f?("📷 "+f.name):""; };
+    const multiUrlInp=document.querySelector("[data-prog-multi-url]");
+    if(multiUrlInp) multiUrlInp.oninput=()=> syncAnexoLink("programas", multiUrlInp.value);
 
     const btnMulti=document.querySelector("[data-prog-multi-btn]");
     if(btnMulti) btnMulti.onclick=async()=>{
@@ -945,6 +949,8 @@
   // state.impactoCategorias — cada categoría genera su propio recuadro de
   // figura vía areasDinamicas()/todasLasAreas().
   function bindMatrizImpactos(){
+    const urlInp=document.querySelector("[data-matriz-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("matrices", urlInp.value);
     const btn=document.querySelector("[data-matriz-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const url=(document.querySelector("[data-matriz-url]")||{}).value||"";
@@ -975,6 +981,8 @@
   // III.4.5: lee el Sheet de receptores y llena directo state.tablaReceptores
   // / state.tablaRiesgoReceptores (formato corto, ya listo para documento.js).
   function bindReceptoresIA(){
+    const urlInp=document.querySelector("[data-receptores-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("receptores", urlInp.value);
     const btn=document.querySelector("[data-receptores-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const url=(document.querySelector("[data-receptores-url]")||{}).value||"";
@@ -1007,6 +1015,8 @@
   // documento.js con tK/tRows) y AGREGA (sin borrar lo existente) los
   // compromisos derivados a la Tabla V.8 (state.tablaCompromisosFinales).
   function bindVigenciasIA(){
+    const urlInp=document.querySelector("[data-vigencias-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("vigencias", urlInp.value);
     const btn=document.querySelector("[data-vigencias-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const url=(document.querySelector("[data-vigencias-url]")||{}).value||"";
@@ -1045,6 +1055,8 @@
   // II.1: llena state.tablas.tablaCumplimiento (formato tablaIA, la lee
   // documento.js con tK/tRows) y sincroniza el link con el clip (VI. Anexos).
   function bindCumplimientoIA(){
+    const urlInp=document.querySelector("[data-cumplimiento-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("cumplimiento", urlInp.value);
     const btn=document.querySelector("[data-cumplimiento-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const url=(document.querySelector("[data-cumplimiento-url]")||{}).value||"";
@@ -1070,6 +1082,8 @@
   // II.1: llena state.tablas.tablaNoms (formato tablaIA, la lee documento.js
   // con tK/tRows) y sincroniza el link con el clip (VI. Anexos).
   function bindNormativoIA(){
+    const urlInp=document.querySelector("[data-normativo-url]");
+    if(urlInp) urlInp.oninput=()=> syncAnexoLink("noms", urlInp.value);
     const btn=document.querySelector("[data-normativo-btn]"); if(!btn) return;
     btn.onclick=async()=>{
       const url=(document.querySelector("[data-normativo-url]")||{}).value||"";
@@ -1097,6 +1111,9 @@
     document.querySelectorAll("input[type=file][data-timg]").forEach(inp=>{
       inp.onchange=()=>{ const f=inp.files[0]; const lbl=document.querySelector('[data-tdimg-name="'+inp.dataset.timg+'"]'); if(lbl) lbl.textContent=f?("📷 "+f.name):""; };
     });
+    // tablaBiota (flora/fauna) es el único campo tablaIA sincronizado con el clip.
+    const biotaUrlInp=document.querySelector('[data-turl="tablaBiota"]');
+    if(biotaUrlInp) biotaUrlInp.oninput=()=> syncAnexoLink("flora_fauna", biotaUrlInp.value);
     document.querySelectorAll("[data-tbtn]").forEach(btn=>{
       btn.onclick=async()=>{
         const fid=btn.dataset.tbtn, field=findField(fid); if(!field) return;
@@ -1150,11 +1167,37 @@
         </div>
       </details>`;
     }).join("");
-    return `<div class="ax-list">${items}</div><p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">🟢 = link cargado · 🟡 = falta. Pegar el link aquí lo refleja en su sección correspondiente, y viceversa. Los enlaces se guardan por proyecto en este equipo. Se exportan con Guardar JSON.</p>`;
+    return `<div class="ax-list">${items}</div><p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">🟢 = link cargado · 🟡 = falta. Pegar el link aquí lo refleja en su sección correspondiente, y viceversa. Los enlaces se guardan por proyecto en este equipo.</p>`;
+  }
+
+  // Mapa doc del clip → selector del input de link en su sección — usado por
+  // syncAnexoLink() para reflejar el valor en ambos sentidos en vivo (sin
+  // esperar a un renderForm() completo, que perdería el foco del input).
+  const ANEXO_FIELD_SEL = {
+    recopilacion: "[data-imp-url]",
+    programas: "[data-prog-multi-url]",
+    flora_fauna: '[data-turl="tablaBiota"]',
+    matrices: "[data-matriz-url]",
+    cumplimiento: "[data-cumplimiento-url]",
+    noms: "[data-normativo-url]",
+    receptores: "[data-receptores-url]",
+    vigencias: "[data-vigencias-url]",
+  };
+  function syncAnexoLink(id, value){
+    if(!state.anexos) state.anexos={};
+    state.anexos[id]=value;
+    const sel=ANEXO_FIELD_SEL[id];
+    if(sel) document.querySelectorAll(sel).forEach(inp=>{ if(inp.value!==value) inp.value=value; });
+    document.querySelectorAll('input.ax-link[data-ax="'+id+'"]').forEach(inp=>{
+      if(inp.value!==value) inp.value=value;
+      const dot=inp.closest(".ax-item")?.querySelector(".ax-dot");
+      if(dot) dot.classList.toggle("ok", !!value.trim());
+    });
+    save();
   }
   function bindAnexos(){
     document.querySelectorAll("input.ax-link[data-ax]").forEach(inp=>{
-      inp.oninput=()=>{ if(!state.anexos) state.anexos={}; state.anexos[inp.dataset.ax]=inp.value; save(); };
+      inp.oninput=()=>{ syncAnexoLink(inp.dataset.ax, inp.value); };
     });
   }
 
