@@ -549,6 +549,22 @@ async function extraerPrograma({ nombre, sheet_url, datos_crudos, imagen }) {
 // CATÁLOGO de criterios con una columna "Criterio de Aplicabilidad (para IA)"
 // que hay que evaluar contra los datos reales del proyecto — Sí/No/Parcial
 // + justificación, fila por fila, sin omitir ninguna.
+// Parte el CSV de una pestaña en fragmentos de N filas (conservando el
+// encabezado en cada fragmento) — así cada llamada a Claude evalúa muchas
+// menos filas y termina mucho más rápido, en vez de una sola llamada grande
+// por pestaña que puede pasarse del límite de 60s de la función serverless.
+function chunkCSV(csv, rowsPerChunk) {
+  const lineas = String(csv).split(/\r?\n/);
+  const header = lineas[0] || "";
+  const filas = lineas.slice(1).filter((l) => l.trim());
+  if (!filas.length) return [csv];
+  const chunks = [];
+  for (let i = 0; i < filas.length; i += rowsPerChunk) {
+    chunks.push(header + "\n" + filas.slice(i, i + rowsPerChunk).join("\n"));
+  }
+  return chunks;
+}
+
 async function extraerProgramasMulti({ sheet_url, datos }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
@@ -558,42 +574,61 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
   if (!tabs.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
 
   const contexto = ctx(datos || {});
+  const ROWS_PER_CHUNK = 10;
 
-  const programas = await Promise.all(tabs.map(async (tab) => {
+  // Aplana TODAS las pestañas en tareas pequeñas (pestaña + fragmento de ~10
+  // filas) y las dispara TODAS a la vez en un solo Promise.all — el tiempo
+  // total pasa a ser el del fragmento más lento (segundos), no el de la
+  // pestaña más grande completa (que podía pasarse de 60s con 41 filas).
+  const tareas = [];
+  tabs.forEach((tab) => {
+    const chunks = chunkCSV(tab.csv, ROWS_PER_CHUNK);
+    chunks.forEach((csvFragmento, i) => {
+      tareas.push({ nombre: tab.name, indice: i + 1, total: chunks.length, csv: csvFragmento });
+    });
+  });
+
+  const resultados = await Promise.all(tareas.map(async (t) => {
     const instruccion =
       `${contexto}\n\n` +
-      `Estás evaluando el programa/instrumento "${tab.name}" para este proyecto. La fuente es una ` +
-      "tabla de criterios o estrategias de ordenamiento ecológico/urbano, con una columna que describe " +
-      "CUÁNDO aplica cada fila (columna de aplicabilidad para IA). Evalúa CADA fila contra los datos " +
-      "del proyecto de arriba (giro — estación de servicio/gasolinera —, ubicación, superficie, si está " +
-      "en ANP) y determina si aplica. Si falta un dato del proyecto para decidir con certeza, usa tu " +
-      "mejor juicio como consultor ambiental para una estación de servicio urbana típica y dilo en la " +
-      "justificación (no dejes la fila sin evaluar).\n\n" +
+      `Estás evaluando el programa/instrumento "${t.nombre}" para este proyecto (fragmento ${t.indice}` +
+      `/${t.total} de la tabla — algunas filas de otros fragmentos no se muestran aquí, evalúa SOLO ` +
+      `las de este fragmento). La fuente es una tabla de criterios o estrategias de ordenamiento ` +
+      "ecológico/urbano, con una columna que describe CUÁNDO aplica cada fila (columna de aplicabilidad " +
+      "para IA). Evalúa CADA fila de este fragmento contra los datos del proyecto de arriba (giro — " +
+      "estación de servicio/gasolinera —, ubicación, superficie, si está en ANP) y determina si aplica. " +
+      "Si falta un dato del proyecto para decidir con certeza, usa tu mejor juicio como consultor " +
+      "ambiental para una estación de servicio urbana típica y dilo en la justificación (no dejes " +
+      "ninguna fila sin evaluar).\n\n" +
       "Devuelve ÚNICAMENTE:\n" +
       "{ \"incisos\": [ { \"criterio\": \"identificador breve de la fila, ej. 'N°3 — Recuperación de " +
       "especies en riesgo'\", \"aplica\": \"Sí\"|\"No\"|\"Parcial\", \"justificacion\": \"...\" }, ... ], " +
       "\"estrategias\": [ { \"n\": 1, \"disposicion\": \"Aplica directamente\"|\"Aplica indirectamente\"" +
       "|\"No aplica\" }, ... ] }\n\n" +
-      "Incluye un inciso por CADA fila de la tabla, sin omitir ninguna — sin límite de filas. Llena " +
-      "\"estrategias\" (usando el N° de la primera columna como \"n\") SOLO si esta pestaña es " +
-      "específicamente el catálogo de las 44 estrategias del POEGT nacional; si no aplica, deja " +
-      "\"estrategias\": [].\n\n" +
-      `Tabla (CSV) de la pestaña "${tab.name}":\n${tab.csv}`;
+      "Incluye un inciso por CADA fila de este fragmento, sin omitir ninguna. Llena \"estrategias\" " +
+      "(usando el N° de la primera columna como \"n\") SOLO si esta pestaña es específicamente el " +
+      "catálogo de las 44 estrategias del POEGT nacional; si no aplica, deja \"estrategias\": [].\n\n" +
+      `Fragmento ${t.indice}/${t.total} de la pestaña "${t.nombre}":\n${t.csv}`;
 
     try {
-      const r = await llamarJSON(apiKey, SYSTEM_PROGRAMA, [{ type: "text", text: instruccion }], 6144, `programas_multi:${tab.name}`);
-      return {
-        nombre: tab.name,
-        incisos: Array.isArray(r.incisos) ? r.incisos : [],
-        estrategias: Array.isArray(r.estrategias) ? r.estrategias : [],
-      };
+      const r = await llamarJSON(apiKey, SYSTEM_PROGRAMA, [{ type: "text", text: instruccion }], 3072, `programas_multi:${t.nombre}:${t.indice}/${t.total}`);
+      return { nombre: t.nombre, incisos: Array.isArray(r.incisos) ? r.incisos : [], estrategias: Array.isArray(r.estrategias) ? r.estrategias : [] };
     } catch (e) {
-      console.error(`[programas_multi] falló la pestaña "${tab.name}":`, e.message);
-      return { nombre: tab.name, incisos: [], estrategias: [], error: e.message };
+      console.error(`[programas_multi] falló "${t.nombre}" fragmento ${t.indice}/${t.total}:`, e.message);
+      return { nombre: t.nombre, incisos: [], estrategias: [], error: e.message };
     }
   }));
 
-  if (programas.every((p) => p.error && !p.incisos.length)) {
+  // Reensambla por pestaña, en el mismo orden en que aparecen en el Sheet.
+  const porTab = {};
+  resultados.forEach((r) => {
+    if (!porTab[r.nombre]) porTab[r.nombre] = { nombre: r.nombre, incisos: [], estrategias: [] };
+    porTab[r.nombre].incisos.push(...r.incisos);
+    porTab[r.nombre].estrategias.push(...r.estrategias);
+  });
+  const programas = tabs.map((tab) => porTab[tab.name] || { nombre: tab.name, incisos: [], estrategias: [] });
+
+  if (!programas.some((p) => p.incisos.length)) {
     throw new Error("La IA no pudo procesar ninguna pestaña del Sheet. Intenta de nuevo.");
   }
   return { programas };
@@ -829,91 +864,98 @@ async function interpretarPlano({ datos, plano, notas_adicionales }) {
     "'pulg' en su lugar; rompe el JSON.";
   const notasTxt = notas_adicionales
     ? `\n\nNotas adicionales del consultor (úsalas; no inventes más):\n${notas_adicionales}` : "";
+  const base = `${ctx(d)}\n\nCon base en el plano adjunto (y los datos del proyecto de arriba), `;
 
-  // Llamada 1 — narrativa POR SUBSECCIÓN (cada una un arreglo de párrafos), para
-  // que cada apartado III.1.x reciba su propio texto en vez de un blob único.
-  const instruccionTexto =
-    `${ctx(d)}\n\n` +
-    "Con base en el plano adjunto (y los datos del proyecto de arriba), interpreta el plano y " +
-    "redacta la Descripción Técnica (Sección III.1) del Informe Preventivo, en español técnico " +
-    "formal, SEPARADA POR SUBSECCIÓN. Devuelve cada subsección como un arreglo de párrafos (un " +
-    "string por párrafo, sin saltos de línea internos, sin markdown ni encabezados):\n" +
-    "- \"general\": III.1 visión general del proyecto/actividad proyectada (1-2 párrafos).\n" +
-    "- \"actividades\": III.1.2 actividades principales del ciclo operativo que se aprecian en el " +
-    "plano (recepción, almacenamiento, despacho, recuperación de vapores, etc.) (1-2 párrafos).\n" +
-    "- \"dimensiones\": III.1.3 dimensiones y distribución de áreas del predio, leídas/inferidas de " +
-    "las cotas, escala y leyenda del plano (superficie del predio, áreas de tanques, islas de " +
-    "despacho, oficinas, patios de maniobra, etc.) (1-2 párrafos).\n" +
-    "- \"caracteristicas\": III.1.4 características del proyecto según su naturaleza (procesos, " +
-    "servicios ofrecidos, tipo de instalación) (1-2 párrafos).\n" +
-    "- \"detallesTecnicos\": III.1.7 detalles técnicos de los equipos mostrados (tanques con sus " +
-    "identificadores tal como aparecen —p.ej. T-01, T-02—, líneas y tuberías, dispensarios/islas, " +
-    "sistema de recuperación de vapores SRV, sistemas de seguridad) (2-3 párrafos).\n\n" +
-    "Devuelve ÚNICAMENTE:\n{ \"narrativa\": { \"general\": [\"...\"], \"actividades\": [\"...\"], " +
-    "\"dimensiones\": [\"...\"], \"caracteristicas\": [\"...\"], \"detallesTecnicos\": [\"...\"] } }\n\n" +
-    "Interpreta razonablemente lo que el plano permita; usa \"[Dato pendiente: descripción]\" " +
-    "dentro del párrafo solo cuando un dato concreto no sea determinable del plano. " +
-    reglaComillas + notasTxt;
+  // En vez de 2 llamadas grandes (narrativa completa + todas las tablas), se
+  // parte en 5 llamadas más chicas y MÁS RÁPIDAS, disparadas TODAS a la vez —
+  // cada una cubre menos texto/tablas por generar, así que aunque las 5 leen
+  // el mismo PDF, el tiempo total baja porque ninguna carga con todo el
+  // trabajo de redacción o de tablas de una sola vez.
+  const narrInstr = (claves, parrafos) =>
+    base +
+    `interpreta el plano y redacta SOLO estas subsecciones de la Descripción Técnica (Sección III.1) ` +
+    `del Informe Preventivo, en español técnico formal, cada una como un arreglo de párrafos (un ` +
+    `string por párrafo, sin saltos de línea internos, sin markdown ni encabezados):\n${parrafos}\n\n` +
+    `Devuelve ÚNICAMENTE:\n{ "narrativa": { ${claves.map((k) => `"${k}": ["..."]`).join(", ")} } }\n\n` +
+    "Interpreta razonablemente lo que el plano permita; usa \"[Dato pendiente: descripción]\" dentro " +
+    "del párrafo solo cuando un dato concreto no sea determinable del plano. " + reglaComillas + notasTxt;
 
-  // Llamada 2 — tablas. Se PERMITE interpretación razonable del plano (no solo
-  // extracción literal), porque los planos suelen mostrar equipos gráficamente
-  // sin una tabla de especificaciones. Incluye la tabla de programa de trabajo.
-  const specTablas = TABLAS_PLANO
-    .map((t) => `- "${t.key}" (${t.titulo}): columnas [${t.columnas.join(", ")}]`)
-    .join("\n");
-  const formaTablas =
-    "{ " +
-    TABLAS_PLANO.map((t) => `"${t.key}": [ { ${t.columnas.map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") +
-    " }";
-  const instruccionTablas =
-    `${ctx(d)}\n\n` +
-    "Con base en el plano adjunto, interpreta lo que muestra (cotas, escala, símbolos, etiquetas, " +
-    "leyendas, notas, conteo de equipos, productos por rótulo/color) y llena las siguientes " +
-    "tablas:\n" + specTablas + "\n\n" +
-    "Para \"tablaPrograma\" (III.1.6 Programa de trabajo): interpreta los tiempos y lapsos " +
-    "estimados por actividad y agrúpalas por etapa (Preparación y construcción, Operación, " +
-    "Abandono). \"Periodo estimado\" = la ventana temporal (ej. \"Semanas 1 a 4\" o \"Mes 1 a 2\"); " +
-    "\"Duración\" = cuánto dura esa actividad (ej. \"4 semanas\", \"25 años\"). Si el plano no " +
-    "indica tiempos, estima un cronograma típico de una estación de servicio y marca la Duración " +
-    "con \"[Dato pendiente]\" cuando no puedas estimarla con fundamento.\n\n" +
-    "Devuelve ÚNICAMENTE:\n{ \"tablas\": " + formaTablas + " }\n\n" +
-    "Reglas: no inventes marcas/números de serie/dictámenes que no estén en el plano (usa \"\" o " +
-    "\"[Dato pendiente]\" en esas celdas); sí puedes inferir capacidades, cantidades, productos y " +
-    "distancias de las cotas y símbolos. Incluye TODAS las filas que el plano muestre, sin límite. " +
-    reglaComillas + notasTxt;
+  const especTabla = (keys) => {
+    const subset = TABLAS_PLANO.filter((t) => keys.includes(t.key));
+    const spec = subset.map((t) => `- "${t.key}" (${t.titulo}): columnas [${t.columnas.join(", ")}]`).join("\n");
+    const forma = "{ " + subset.map((t) => `"${t.key}": [ { ${t.columnas.map((c) => `"${c}": ""`).join(", ")} } ]`).join(", ") + " }";
+    return { spec, forma };
+  };
 
-  const [rTexto, rTablas] = await Promise.all([
-    llamarPlano(apiKey, docBlock, instruccionTexto, 4096, "narrativa")
-      .catch((e) => { console.error("[plano] falló la parte de narrativa:", e.message); return null; }),
-    llamarPlano(apiKey, docBlock, instruccionTablas, 8192, "tablas")
-      .catch((e) => { console.error("[plano] falló la parte de tablas:", e.message); return null; }),
-  ]);
+  const tareas = [
+    { etiqueta: "narrativa:1", maxTokens: 2048, instruccion: narrInstr(
+        ["general", "actividades"],
+        "- \"general\": III.1 visión general del proyecto/actividad proyectada (1-2 párrafos).\n" +
+        "- \"actividades\": III.1.2 actividades principales del ciclo operativo que se aprecian en el plano (recepción, almacenamiento, despacho, recuperación de vapores, etc.) (1-2 párrafos)."
+      ) },
+    { etiqueta: "narrativa:2", maxTokens: 2048, instruccion: narrInstr(
+        ["dimensiones", "caracteristicas"],
+        "- \"dimensiones\": III.1.3 dimensiones y distribución de áreas del predio, leídas/inferidas de las cotas, escala y leyenda del plano (1-2 párrafos).\n" +
+        "- \"caracteristicas\": III.1.4 características del proyecto según su naturaleza (procesos, servicios ofrecidos, tipo de instalación) (1-2 párrafos)."
+      ) },
+    { etiqueta: "narrativa:3", maxTokens: 2048, instruccion: narrInstr(
+        ["detallesTecnicos"],
+        "- \"detallesTecnicos\": III.1.7 detalles técnicos de los equipos mostrados (tanques con sus identificadores tal como aparecen —p.ej. T-01, T-02—, líneas y tuberías, dispensarios/islas, SRV, sistemas de seguridad) (2-3 párrafos)."
+      ) },
+  ];
 
-  if (!rTexto && !rTablas) {
+  const gruposTablas = [["tablaTanques", "tablaTuberias"], ["tablaExtintores", "tablaDistancias"], ["tablaPrograma"]];
+  gruposTablas.forEach((keys) => {
+    const { spec, forma } = especTabla(keys);
+    const esPrograma = keys.includes("tablaPrograma");
+    tareas.push({
+      etiqueta: "tablas:" + keys.join("+"),
+      maxTokens: 3072,
+      instruccion:
+        base +
+        "interpreta lo que muestra (cotas, escala, símbolos, etiquetas, leyendas, notas, conteo de " +
+        "equipos, productos por rótulo/color) y llena SOLO estas tablas:\n" + spec + "\n\n" +
+        (esPrograma
+          ? "Para \"tablaPrograma\" (III.1.6 Programa de trabajo): interpreta los tiempos y lapsos " +
+            "estimados por actividad y agrúpalas por etapa (Preparación y construcción, Operación, " +
+            "Abandono). \"Periodo estimado\" = la ventana temporal; \"Duración\" = cuánto dura esa " +
+            "actividad. Si el plano no indica tiempos, estima un cronograma típico de una estación de " +
+            "servicio y marca la Duración con \"[Dato pendiente]\" cuando no puedas estimarla.\n\n"
+          : "") +
+        "Devuelve ÚNICAMENTE:\n{ \"tablas\": " + forma + " }\n\n" +
+        "Reglas: no inventes marcas/números de serie/dictámenes que no estén en el plano (usa \"\" o " +
+        "\"[Dato pendiente]\" en esas celdas); sí puedes inferir capacidades, cantidades, productos y " +
+        "distancias de las cotas y símbolos. Incluye TODAS las filas que el plano muestre, sin límite. " +
+        reglaComillas + notasTxt,
+    });
+  });
+
+  const resultados = await Promise.all(tareas.map((t) =>
+    llamarPlano(apiKey, docBlock, t.instruccion, t.maxTokens, t.etiqueta)
+      .catch((e) => { console.error(`[plano] falló "${t.etiqueta}":`, e.message); return null; })
+  ));
+
+  if (resultados.every((r) => !r)) {
     throw new Error(
-      "La IA no pudo procesar el plano (fallaron tanto la redacción como las tablas). Intenta de " +
-      "nuevo, o con un plano más simple/menos páginas si el problema persiste."
+      "La IA no pudo procesar el plano (fallaron todas las partes). Intenta de nuevo, o con un plano " +
+      "más simple/menos páginas si el problema persiste."
     );
   }
 
   // Une cada subsección (arreglo de párrafos) con doble salto de línea, para que
   // IAP() del documento la vuelva a partir en párrafos.
-  const N = (rTexto && rTexto.narrativa) || {};
-  const unir = (v) => {
-    const s = Array.isArray(v) ? v.join("\n\n") : (v || "");
-    return limpiarMarkdown(s);
-  };
-  const narrativa = {
-    general: unir(N.general),
-    actividades: unir(N.actividades),
-    dimensiones: unir(N.dimensiones),
-    caracteristicas: unir(N.caracteristicas),
-    detallesTecnicos: unir(N.detallesTecnicos),
-  };
-  const tablas = (rTablas && rTablas.tablas) || {};
+  const unir = (v) => limpiarMarkdown(Array.isArray(v) ? v.join("\n\n") : (v || ""));
+  const narrativa = { general: "", actividades: "", dimensiones: "", caracteristicas: "", detallesTecnicos: "" };
+  const tablas = {};
+  resultados.forEach((r) => {
+    if (!r) return;
+    if (r.narrativa) Object.keys(r.narrativa).forEach((k) => { if (k in narrativa) narrativa[k] = unir(r.narrativa[k]); });
+    if (r.tablas) Object.assign(tablas, r.tablas);
+  });
+
   const hayNarrativa = Object.values(narrativa).some((s) => s.trim());
   if (!hayNarrativa && !Object.keys(tablas).length) {
-    console.warn("[plano] ambas llamadas devolvieron JSON válido pero vacío — revisa la calidad/legibilidad del PDF.");
+    console.warn("[plano] todas las llamadas devolvieron JSON válido pero vacío — revisa la calidad/legibilidad del PDF.");
   }
   return { narrativa, tablas };
 }

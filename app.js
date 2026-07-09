@@ -9,6 +9,18 @@
   const esc = (s) => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const STORE = "verde_raiz_ip_v1";
 
+  // Parsea la respuesta de /api/redactar; si no es JSON válido (ej. Vercel
+  // devuelve su propia página de error), da un mensaje accionable en vez del
+  // genérico — especialmente para 504 (la función tardó más de 60s).
+  function jsonOrError(r){
+    return r.json().catch(()=>({
+      ok:false,
+      error: r.status===504
+        ? "La IA tardó demasiado (más de 60s) — vuelve a intentar, o con menos pestañas/páginas a la vez"
+        : ("Respuesta no válida del servidor (HTTP "+r.status+")")
+    }));
+  }
+
   // ============== BUCKET DE IMÁGENES (IndexedDB) ==============
   // Almacén local capaz de guardar muchas imágenes (cientos de MB), offline.
   const IMG_DB="verde_raiz_img", IMG_STORE="img";
@@ -184,8 +196,8 @@
       {id:"utmDatum", l:"Datum", tipo:"text", b:"cerrada", def:"WGS84"},
       {id:"superficie", l:"Superficie ocupada por el proyecto (m²)", tipo:"num", b:"cerrada"},
       {id:"inversion", l:"Inversión estimada (MXN)", tipo:"money", b:"cerrada"},
-      {id:"empleosDir", l:"Empleos directos", tipo:"num", b:"cerrada"},
-      {id:"empleosInd", l:"Empleos indirectos", tipo:"num", b:"cerrada"},
+      {id:"empleosDir", l:"Empleos directos", tipo:"text", b:"cerrada", hint:"admite rango, ej. 29-42"},
+      {id:"empleosInd", l:"Empleos indirectos", tipo:"text", b:"cerrada", hint:"admite rango, ej. 29-42"},
       {id:"durPrep", l:"Duración — Preparación del sitio", tipo:"text", b:"cerrada", hint:"meses/semanas"},
       {id:"durConstr", l:"Duración — Construcción", tipo:"text", b:"cerrada"},
       {id:"durOper", l:"Duración — Operación", tipo:"text", b:"cerrada", hint:"años"},
@@ -719,7 +731,7 @@
       btn.disabled=true; const prev=btn.textContent; btn.textContent="Extrayendo…"; if(status) status.textContent=" Leyendo la recopilación con IA…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"perfil", campos:camposImportables(), datos_crudos:txt.trim(), sheet_url:url.trim(), imagen})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const c=j.campos||{}; let n=0;
         Object.keys(c).forEach(k=>{ const v=c[k]; if(v!==undefined && v!==null && String(v).trim()!==""){ state[k]=v; n++; } });
@@ -770,7 +782,7 @@
       if(status) status.textContent=" Enumerando pestañas y evaluando criterios con IA — puede tardar…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"programas_multi", sheet_url:url.trim(), datos})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const programas=j.programas||[];
         if(!programas.length){ throw new Error("No se encontraron pestañas en ese link"); }
@@ -802,7 +814,7 @@
       btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…"; if(status) status.textContent=" Leyendo el programa con IA…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"programa", nombre:nombre.trim(), sheet_url:url.trim(), datos_crudos:txt.trim(), imagen})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const campos=j.campos||{};
         Object.keys(PROG_CAMPOS_MAP).forEach(k=>{
@@ -853,7 +865,7 @@
         if(status) status.textContent=" La IA está leyendo el plano, puede tardar unos segundos…";
         try{
           const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"plano", datos, plano, notas_adicionales:notas.trim()})});
-          const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          const j=await jsonOrError(r);
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
           // Narrativa por subsección → cada apartado III.1.x recibe su propio texto.
           const N=j.narrativa||{};
@@ -933,7 +945,7 @@
       if(status) status.textContent=" Leyendo pestañas y detectando categorías con IA — puede tardar…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"matrices", sheet_url:url.trim(), datos})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const categorias=j.categorias||[];
         if(!categorias.length){ throw new Error("La IA no detectó categorías en la matriz"); }
@@ -962,7 +974,7 @@
       if(status) status.textContent=" Leyendo receptores y evaluando riesgo con IA…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"receptores", sheet_url:url.trim(), datos})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const tr=j.tablaReceptores||[], trr=j.tablaRiesgoReceptores||[];
         if(!tr.length && !trr.length){ throw new Error("La IA no encontró receptores en ese Sheet"); }
@@ -993,7 +1005,7 @@
       if(status) status.textContent=" Leyendo vigencias y derivando compromisos con IA…";
       try{
         const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"vigencias", sheet_url:url.trim(), datos})});
-        const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+        const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const tv=j.tablaVigencias||[], comp=j.compromisos||[];
         if(!tv.length && !comp.length){ throw new Error("La IA no encontró documentos en ese Sheet"); }
@@ -1029,7 +1041,7 @@
         btn.disabled=true; const prev=btn.textContent; btn.textContent="Estructurando…"; if(status) status.textContent=" Procesando con IA…";
         try{
           const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"tabla", tablas:field.tablas, datos_crudos, imagen})});
-          const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          const j=await jsonOrError(r);
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
           if(!state.tablas) state.tablas={};
           Object.keys(j.tablas||{}).forEach(k=>{ if(Array.isArray(j.tablas[k])) state.tablas[k]=j.tablas[k]; });
@@ -1128,7 +1140,7 @@
         if(status) status.textContent = " Generando con IA, espera unos segundos…";
         try{
           const r = await fetch("/api/redactar", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({seccion, datos}) });
-          const j = await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
+          const j = await jsonOrError(r);
           if(!j.ok) throw new Error(j.error || ("HTTP "+r.status));
           state[target] = j.texto; save(); renderForm();
           toast("Redacción generada ✓ — revisa el texto y míralo en el documento (III.4.3)");
