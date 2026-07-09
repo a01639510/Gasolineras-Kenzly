@@ -11,6 +11,13 @@
    ===================================================================== */
 
 const MODEL = "claude-sonnet-4-6";
+// Modelo económico/rápido para acciones de EXTRACCIÓN mecánica (leer un
+// Sheet ya estructurado y mapearlo a columnas exactas) donde no hace falta
+// la redacción/razonamiento de Sonnet — mismo formato de API, ~12x más
+// barato y notablemente más rápido (ayuda también a no pegarle al techo de
+// 60s de Vercel Hobby). NO se usa para redacción de prosa técnica ni para
+// juicio normativo (aplicabilidad de criterios, clasificación NOM-059).
+const MODEL_HAIKU = "claude-haiku-4-5-20251001";
 
 // ── SYSTEM ─────────────────────────────────────────────────────────────────
 // Se pasa como bloque "system" de la API; define el rol y las reglas absolutas.
@@ -415,11 +422,11 @@ async function fetchSheetTabs(url) {
 // manejo robusto ya probado en el modo "plano": quita cercas ```json```,
 // distingue truncamiento por max_tokens de JSON genuinamente mal formado, y
 // loggea lo suficiente para diagnosticar desde Vercel → Logs.
-async function llamarJSON(apiKey, system, content, maxTokens, etiqueta) {
+async function llamarJSON(apiKey, system, content, maxTokens, etiqueta, model) {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model: model || MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content }] }),
   });
   if (!resp.ok) { const d2 = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d2.slice(0, 300)}`); }
   const data = await resp.json();
@@ -483,7 +490,7 @@ async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
     content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
   content.push({ type: "text", text: instruccion });
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_PERFIL, content, 6144, "perfil");
+  const parsed = await llamarJSON(apiKey, SYSTEM_PERFIL, content, 6144, "perfil", MODEL_HAIKU);
   return { campos: parsed.campos || {}, tablas: parsed.tablas || {} };
 }
 
@@ -581,6 +588,70 @@ function muestrearCSV(csv, maxFilas) {
   return header + "\n" + muestra.join("\n") + `\n[...muestreo: ${maxFilas} de ${filas.length} filas totales...]`;
 }
 
+// Parsea una línea CSV respetando comillas (evita romper columnas cuando un
+// valor trae comas embebidas — común en exports de campo libre).
+function parseCSVLine(line) {
+  const out = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+// Exports de biodiversidad (iNaturalist/SNIB/Enciclovida) traen miles de
+// OBSERVACIONES individuales (~20 columnas irrelevantes: coordenadas,
+// fecha, observador, url...) cuando lo único que necesita el listado
+// bibliográfico (Tablas III.15–III.18) es la especie única. En vez de
+// muestrear filas (que puede omitir especies raras) se deduplica por
+// scientific_name y se descartan las columnas que no aportan — baja de
+// ~1.6M chars/5290 filas a ~30k chars/tantas especies únicas haya, sin
+// perder ninguna especie y sin gastar tokens en columnas que Claude nunca
+// usa. Si el CSV no trae ese formato (no es un export de biodiversidad),
+// regresa null y el llamador cae al muestreo genérico.
+
+// Grupos taxonómicos que NO caben en ninguna de las 4 tablas bibliográficas
+// del IP (Flora/Mamíferos/Avifauna/Herpetofauna) — se excluyen para no
+// gastar tokens clasificando especies que de todos modos no tienen dónde
+// ir. Lista de EXCLUSIÓN (no de inclusión): ante un valor desconocido o
+// vacío se conserva la fila, para no perder datos por variaciones de
+// formato entre distintas fuentes.
+const GRUPOS_FUERA_DE_ALCANCE = new Set(["Insecta", "Arachnida", "Fungi", "Mollusca", "Actinopterygii", "Chromista", "Protozoa"]);
+
+function podarListaEspecies(csv) {
+  const lineas = String(csv).split(/\r?\n/).filter((l) => l.trim());
+  if (lineas.length < 2) return null;
+  const header = parseCSVLine(lineas[0]).map((h) => h.trim().toLowerCase());
+  const idxSci = header.indexOf("scientific_name");
+  if (idxSci < 0) return null;
+  const idxCommon = header.indexOf("common_name");
+  const idxGrupo = header.indexOf("iconic_taxon_name");
+
+  const vistos = new Map();
+  for (let i = 1; i < lineas.length; i++) {
+    const cols = parseCSVLine(lineas[i]);
+    const sci = (cols[idxSci] || "").trim();
+    if (!sci || vistos.has(sci)) continue;
+    const grupo = idxGrupo >= 0 ? (cols[idxGrupo] || "").trim() : "";
+    if (GRUPOS_FUERA_DE_ALCANCE.has(grupo)) continue;
+    vistos.set(sci, { common: idxCommon >= 0 ? (cols[idxCommon] || "").trim() : "", grupo });
+  }
+  if (!vistos.size) return null;
+
+  let salida = "scientific_name,common_name,grupo_taxonomico\n";
+  vistos.forEach((v, sci) => { salida += `"${sci}","${v.common}","${v.grupo}"\n`; });
+  return { csv: salida, especies: vistos.size };
+}
+
 async function extraerProgramasMulti({ sheet_url, datos }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
@@ -668,12 +739,16 @@ async function extraerMatrices({ sheet_url, datos }) {
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
   if (!sheet_url) throw new Error("Pega el link de Google Sheets de las matrices de impacto.");
 
-  const tabs = await fetchSheetTabs(sheet_url);
-  if (!tabs.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
+  const tabsCrudos = await fetchSheetTabs(sheet_url);
+  if (!tabsCrudos.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
+  // Pestañas de instrucciones/leyenda (texto para humanos, no datos de la
+  // matriz) no aportan nada al análisis — se descartan antes de gastar
+  // tokens en ellas.
+  const tabs = tabsCrudos.filter((t) => !/instrucci|leyenda/i.test(t.name));
 
   // La Matriz de Resultados puede traer cientos de filas; se recorta por
-  // pestaña para no disparar el tamaño/tiempo de la llamada.
-  const MAX_CHARS = 60000;
+  // pestaña para no disparar el tamaño/tiempo/costo de la llamada.
+  const MAX_CHARS = 20000;
   const fuente = tabs
     .map((t) => {
       const csv = t.csv.length > MAX_CHARS ? t.csv.slice(0, MAX_CHARS) + "\n[...recortado por longitud...]" : t.csv;
@@ -696,7 +771,7 @@ async function extraerMatrices({ sheet_url, datos }) {
     "en su lugar; rompe el JSON.\n\n" +
     `Datos (${tabs.length} pestaña(s)):\n${fuente}`;
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_MATRICES, [{ type: "text", text: instruccion }], 8192, "matrices");
+  const parsed = await llamarJSON(apiKey, SYSTEM_MATRICES, [{ type: "text", text: instruccion }], 8192, "matrices", MODEL_HAIKU);
   const categorias = Array.isArray(parsed.categorias) ? parsed.categorias.filter((c) => c && c.nombre) : [];
   if (!categorias.length) throw new Error("La IA no detectó categorías de impacto en la matriz.");
   return { categorias };
@@ -746,7 +821,7 @@ async function extraerReceptores({ sheet_url, datos_crudos, datos }) {
     "rompe el JSON.\n\n" +
     `Fuente:\n${fuente}`;
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_RECEPTORES, [{ type: "text", text: instruccion }], 6144, "receptores");
+  const parsed = await llamarJSON(apiKey, SYSTEM_RECEPTORES, [{ type: "text", text: instruccion }], 6144, "receptores", MODEL_HAIKU);
   return {
     tablaReceptores: Array.isArray(parsed.tablaReceptores) ? parsed.tablaReceptores : [],
     tablaRiesgoReceptores: Array.isArray(parsed.tablaRiesgoReceptores) ? parsed.tablaRiesgoReceptores : [],
@@ -796,7 +871,7 @@ async function extraerVigencias({ sheet_url, datos_crudos, datos }) {
     "lugar; rompe el JSON.\n\n" +
     `Fuente:\n${fuente}`;
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_VIGENCIAS, [{ type: "text", text: instruccion }], 8192, "vigencias");
+  const parsed = await llamarJSON(apiKey, SYSTEM_VIGENCIAS, [{ type: "text", text: instruccion }], 8192, "vigencias", MODEL_HAIKU);
   return {
     tablaVigencias: Array.isArray(parsed.tablaVigencias) ? parsed.tablaVigencias : [],
     compromisos: Array.isArray(parsed.compromisos) ? parsed.compromisos : [],
@@ -835,7 +910,7 @@ async function extraerCumplimiento({ sheet_url, datos_crudos, datos }) {
     "lugar; rompe el JSON.\n\n" +
     `Fuente:\n${fuente}`;
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_CUMPLIMIENTO, [{ type: "text", text: instruccion }], 6144, "cumplimiento");
+  const parsed = await llamarJSON(apiKey, SYSTEM_CUMPLIMIENTO, [{ type: "text", text: instruccion }], 6144, "cumplimiento", MODEL_HAIKU);
   return {
     tablaCumplimiento: Array.isArray(parsed.tablaCumplimiento) ? parsed.tablaCumplimiento : [],
   };
@@ -872,7 +947,7 @@ async function extraerNormativo({ sheet_url, datos_crudos, datos }) {
     "lugar; rompe el JSON.\n\n" +
     `Fuente:\n${fuente}`;
 
-  const parsed = await llamarJSON(apiKey, SYSTEM_NORMATIVO, [{ type: "text", text: instruccion }], 6144, "normativo");
+  const parsed = await llamarJSON(apiKey, SYSTEM_NORMATIVO, [{ type: "text", text: instruccion }], 6144, "normativo", MODEL_HAIKU);
   return {
     tablaNoms: Array.isArray(parsed.tablaNoms) ? parsed.tablaNoms : [],
   };
@@ -1066,11 +1141,29 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
 
   // Cualquier campo tablaIA puede opcionalmente traer un link de Google
   // Sheets (ej. la base de flora/fauna) además de/en vez de texto pegado.
+  // Los listados de especies (podarListaEspecies) se mandan aparte porque
+  // pueden ser grandes incluso después de podados — se fragmentan más abajo.
   let fuente = datos_crudos || "";
+  let especiesCSV = "";
+  let especiesTotal = 0;
   if (sheet_url) {
     const tabs = await fetchSheetTabs(sheet_url);
-    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${muestrearCSV(t.csv, 600)}`).join("");
+    tabs.forEach((t) => {
+      const podado = podarListaEspecies(t.csv);
+      if (podado) {
+        especiesCSV += (especiesCSV ? "\n" : "") + podado.csv.split("\n").slice(1).join("\n");
+        especiesTotal += podado.especies;
+      } else {
+        fuente += `\n\n=== Pestaña: ${t.name} ===\n${muestrearCSV(t.csv, 600)}`;
+      }
+    });
+    if (especiesCSV) especiesCSV = "scientific_name,common_name,grupo_taxonomico\n" + especiesCSV;
   }
+  const esListaEspecies = !!especiesCSV;
+  // Listados de especies necesitan el conocimiento taxonómico amplio de
+  // Sonnet (clasificación NOM-059); el resto de tablaIA es extracción
+  // mecánica de datos ya estructurados — Haiku es más rápido y barato.
+  const modelTabla = esListaEspecies ? MODEL : MODEL_HAIKU;
 
   const spec = tablas
     .map((t) => `- "${t.key}" (${t.titulo || t.key}): columnas [${(t.columnas || []).join(", ")}]`)
@@ -1081,16 +1174,47 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
       .map((t) => `"${t.key}": [ { ${(t.columnas || []).map((c) => `"${c}": ""`).join(", ")} } ]`)
       .join(", ") +
     " }";
-
-  const instruccion =
+  const buildInstruccion = (fuenteBloque) =>
     `Estructura la información proporcionada (texto y/o imagen) en las siguientes tablas.\n` +
     `Devuelve ÚNICAMENTE un objeto JSON con esta forma exacta:\n${forma}\n\n` +
     `Tablas a llenar:\n${spec}\n\n` +
     `Reglas: una fila por registro; no inventes datos (campo vacío si no aparece en la fuente); ` +
     `incluye TODAS las filas encontradas, sin límite; nunca uses el símbolo " (comillas de ` +
     `pulgadas) dentro de ningún valor, escribe 'pulg' en su lugar — rompe el JSON.` +
-    (fuente ? `\n\nDatos crudos:\n${fuente}` : "");
+    (fuenteBloque ? `\n\nDatos crudos:\n${fuenteBloque}` : "");
 
+  // Camino fragmentado: un listado de especies grande puede necesitar más
+  // filas de salida de las que caben en una sola respuesta (max_tokens) y
+  // tardar más de los 60s de Vercel Hobby si se pide de un jalón. Se
+  // fragmenta en pedazos chicos y se disparan TODOS en paralelo — el tiempo
+  // total pasa a ser el del pedazo más lento, no la suma de todos.
+  const FILAS_POR_CHUNK = 150;
+  if (esListaEspecies) {
+    const chunks = chunkCSV(especiesCSV, FILAS_POR_CHUNK);
+    if (chunks.length > 1) {
+      const resultados = await Promise.all(
+        chunks.map((chunk, idx) => {
+          const bloque = (fuente ? fuente + "\n\n" : "") + `=== Especies (parte ${idx + 1}/${chunks.length}) ===\n${chunk}`;
+          return llamarJSON(apiKey, SYSTEM_TABLA, [{ type: "text", text: buildInstruccion(bloque) }], 8192, `tabla:especies:${idx + 1}/${chunks.length}`, modelTabla)
+            .catch((e) => { console.error(`[tabla] falló chunk de especies ${idx + 1}/${chunks.length}:`, e.message); return null; });
+        })
+      );
+      const combinado = {};
+      tablas.forEach((t) => { combinado[t.key] = []; });
+      resultados.forEach((r) => {
+        if (!r) return;
+        tablas.forEach((t) => { if (Array.isArray(r[t.key])) combinado[t.key].push(...r[t.key]); });
+      });
+      if (!Object.values(combinado).some((arr) => arr.length)) {
+        throw new Error(`La IA no pudo procesar el listado de ${especiesTotal} especies. Intenta de nuevo.`);
+      }
+      return { tablas: combinado };
+    }
+    // Pocas especies (cabe en 1 sola llamada): sigue el camino normal de abajo.
+    fuente += (fuente ? "\n\n" : "") + `=== Especies ===\n${especiesCSV}`;
+  }
+
+  const instruccion = buildInstruccion(fuente);
   const content = [];
   if (imagen && imagen.data)
     content.push({ type: "image", source: { type: "base64", media_type: imagen.media_type || "image/png", data: imagen.data } });
@@ -1099,7 +1223,7 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: SYSTEM_TABLA, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model: modelTabla, max_tokens: 8192, system: SYSTEM_TABLA, messages: [{ role: "user", content }] }),
   });
   if (!resp.ok) { const d = await resp.text(); throw new Error(`Anthropic ${resp.status}: ${d.slice(0, 300)}`); }
   const data = await resp.json();

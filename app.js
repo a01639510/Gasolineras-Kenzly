@@ -1167,7 +1167,10 @@
         </div>
       </details>`;
     }).join("");
-    return `<div class="ax-list">${items}</div><p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">🟢 = link cargado · 🟡 = falta. Pegar el link aquí lo refleja en su sección correspondiente, y viceversa. Los enlaces se guardan por proyecto en este equipo.</p>`;
+    return `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+        `<button type="button" class="btn ghost" data-ax-refresh style="font-size:12px">🔄 Actualizar enlaces</button>`+
+      `</div>`+
+      `<div class="ax-list">${items}</div><p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">🟢 = link cargado · 🟡 = falta. Pegar el link aquí lo refleja en su sección correspondiente, y viceversa — si algo no se refleja, usa "Actualizar enlaces". Los enlaces se guardan por proyecto en este equipo.</p>`;
   }
 
   // Mapa doc del clip → selector del input de link en su sección — usado por
@@ -1199,6 +1202,18 @@
     document.querySelectorAll("input.ax-link[data-ax]").forEach(inp=>{
       inp.oninput=()=>{ syncAnexoLink(inp.dataset.ax, inp.value); };
     });
+    const refreshBtn=$("[data-ax-refresh]");
+    if(refreshBtn) refreshBtn.onclick=()=>{
+      // Red de seguridad manual: fuerza que cada state.anexos.* quede
+      // reflejado en su sección Y en el clip, por si el reflejo en vivo
+      // (oninput) no alcanzó a aplicarse (ej. edición mientras el modal
+      // estaba cerrado).
+      save();
+      renderForm();
+      const b=$("#modalAnexosBody");
+      if(b){ b.innerHTML=renderAnexos(); bindAnexos(); }
+      toast("✓ Enlaces actualizados en todas las secciones");
+    };
   }
 
   // Checklist ASEA-00-041 (interactivo, persistente en localStorage).
