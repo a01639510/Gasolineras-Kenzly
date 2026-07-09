@@ -146,7 +146,14 @@
     if(!Array.isArray(cats) || !cats.length) return [];
     return cats.map((c,i)=>({ id:"catimg_"+i, sec:"III5", defaults:[(c.nombre||("Categoría "+(i+1)))+" — impacto"] }));
   }
-  function todasLasAreas(){ return (D.AREAS||[]).concat(areasDinamicas()); }
+  // II.2: un área de imagen POR PROGRAMA de ordenamiento agregado (mapas/
+  // evidencia específica de ese programa) — mismo patrón que areasDinamicas().
+  function areasProgramas(){
+    const progs = state.programas;
+    if(!Array.isArray(progs) || !progs.length) return [];
+    return progs.map((p,i)=>({ id:"progimg_"+i, sec:"II2", defaults:[(p.nombre||("Programa "+(i+1)))+" — mapa/evidencia"] }));
+  }
+  function todasLasAreas(){ return (D.AREAS||[]).concat(areasDinamicas()).concat(areasProgramas()); }
   let _liveT=null;
   function programarLive(){ clearTimeout(_liveT); _liveT=setTimeout(()=>{ try{ renderLiveDoc(); }catch(e){} }, 280); }
 
@@ -227,7 +234,11 @@
     ]},
 
     { id:"II1", grp:"II. Fundamento jurídico", titulo:"II.1 Instrumentos jurídicos aplicables", desc:"Selecciona los instrumentos; cada uno trae su descripción y vinculación estándar.", fields:[
-      {id:"instrumentos", l:"Marco normativo", tipo:"instrumentos", b:"boiler"}
+      {id:"instrumentos", l:"Marco normativo", tipo:"instrumentos", b:"boiler"},
+      {id:"cumplimientoIA", l:"Leer cumplimiento normativo específico (IA)", tipo:"cumplimientoIA", b:"boiler",
+        nota:"Pega el link de Google Sheets de cumplimiento de NOMs específicas del proyecto (NOM / Descripción / Requisito clave / Cumple). La IA llena la tabla de verificación de II.1."},
+      {id:"normativoIA", l:"Leer leyes y NOMs aplicables (IA)", tipo:"normativoIA", b:"boiler",
+        nota:"Pega el link de Google Sheets de leyes y NOMs aplicables (Ley / Descripción / Sector aplicable / Límite-Requisito / Vigente). La IA llena la tabla de II.1."}
     ]},
 
     { id:"II2", grp:"II. Fundamento jurídico", titulo:"II.2 Ordenamiento ecológico (POEGT)", desc:"Texto nacional fijo + variables de la UAB; y las 44 estrategias con respuesta estándar.", fields:[
@@ -700,6 +711,8 @@
     bindMatrizImpactos();
     bindReceptoresIA();
     bindVigenciasIA();
+    bindCumplimientoIA();
+    bindNormativoIA();
     setupScrollSpy();
     updateProgress();
     programarLive();
@@ -742,6 +755,7 @@
         Object.keys(j.tablas||{}).forEach(k=>{
           if(Array.isArray(j.tablas[k]) && j.tablas[k].length){ state.tablas[k]=j.tablas[k]; nTablas++; }
         });
+        if(url.trim()){ if(!state.anexos) state.anexos={}; state.anexos.recopilacion=url.trim(); }
         save(); renderForm();
         toast(n||nTablas?("✓ "+n+" campos autollenados"+(nTablas?" + cronograma cargado en III.1.6":"")+" — verifícalos"):"No se encontraron campos en la recopilación");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al importar: "+e.message); }
@@ -795,6 +809,7 @@
             if(idx>=0 && e.disposicion){ state.estrategias[idx]={n:D.ESTRATEGIAS_POEGT[idx].n, d:e.disposicion}; nEstr++; }
           });
         });
+        if(!state.anexos) state.anexos={}; state.anexos.programas=url.trim();
         save(); renderForm();
         toast("✓ "+programas.length+" programa(s) agregados desde "+programas.length+" pestaña(s)"+(nEstr?` — ${nEstr} estrategias POEGT actualizadas`:""));
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btnMulti.disabled=false; btnMulti.textContent=prevM; toast("Error al leer las pestañas: "+e.message); }
@@ -950,6 +965,7 @@
         const categorias=j.categorias||[];
         if(!categorias.length){ throw new Error("La IA no detectó categorías en la matriz"); }
         state.impactoCategorias=categorias;
+        if(!state.anexos) state.anexos={}; state.anexos.matrices=url.trim();
         save(); renderForm();
         toast("✓ "+categorias.length+" categoría(s) de impacto detectadas — revísalas en III.5.7");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer la matriz: "+e.message); }
@@ -980,6 +996,7 @@
         if(!tr.length && !trr.length){ throw new Error("La IA no encontró receptores en ese Sheet"); }
         if(tr.length) state.tablaReceptores=tr;
         if(trr.length) state.tablaRiesgoReceptores=trr;
+        if(!state.anexos) state.anexos={}; state.anexos.receptores=url.trim();
         save(); renderForm();
         toast("✓ "+tr.length+" receptor(es) + "+trr.length+" evaluación(es) de riesgo cargados en III.4.5");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer receptores: "+e.message); }
@@ -1018,9 +1035,60 @@
             state.tablaCompromisosFinales.push({ num:String(maxNum), compromiso:c.compromiso||"", etapa:c.etapa||"Operación", normativa:c.normativa||"" });
           });
         }
+        if(!state.anexos) state.anexos={}; state.anexos.vigencias=url.trim();
         save(); renderForm();
         toast("✓ "+tv.length+" documento(s) cargados"+(comp.length?` + ${comp.length} compromiso(s) agregados a V.8`:""));
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer vigencias: "+e.message); }
+    };
+  }
+
+  // II.1: llena state.tablas.tablaCumplimiento (formato tablaIA, la lee
+  // documento.js con tK/tRows) y sincroniza el link con el clip (VI. Anexos).
+  function bindCumplimientoIA(){
+    const btn=document.querySelector("[data-cumplimiento-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const url=(document.querySelector("[data-cumplimiento-url]")||{}).value||"";
+      const status=document.querySelector("[data-cumplimiento-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets de cumplimiento"); return; }
+      const datos={ nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado","") };
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…";
+      if(status) status.textContent=" Leyendo cumplimiento normativo con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"cumplimiento", sheet_url:url.trim(), datos})});
+        const j=await jsonOrError(r);
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const tc=j.tablaCumplimiento||[];
+        if(!tc.length){ throw new Error("La IA no encontró NOMs en ese Sheet"); }
+        if(!state.tablas) state.tablas={}; state.tablas.tablaCumplimiento=tc;
+        if(!state.anexos) state.anexos={}; state.anexos.cumplimiento=url.trim();
+        save(); renderForm();
+        toast("✓ "+tc.length+" NOM(s) cargada(s) en II.1");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer cumplimiento: "+e.message); }
+    };
+  }
+
+  // II.1: llena state.tablas.tablaNoms (formato tablaIA, la lee documento.js
+  // con tK/tRows) y sincroniza el link con el clip (VI. Anexos).
+  function bindNormativoIA(){
+    const btn=document.querySelector("[data-normativo-btn]"); if(!btn) return;
+    btn.onclick=async()=>{
+      const url=(document.querySelector("[data-normativo-url]")||{}).value||"";
+      const status=document.querySelector("[data-normativo-status]");
+      if(!url.trim()){ toast("Pega el link de Google Sheets de leyes y NOMs"); return; }
+      const datos={ nombre_proyecto:g("proyecto",""), municipio:g("municipio",""), estado:g("estado","") };
+      btn.disabled=true; const prev=btn.textContent; btn.textContent="Leyendo…";
+      if(status) status.textContent=" Leyendo leyes y NOMs aplicables con IA…";
+      try{
+        const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"normativo", sheet_url:url.trim(), datos})});
+        const j=await jsonOrError(r);
+        if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+        const tn=j.tablaNoms||[];
+        if(!tn.length){ throw new Error("La IA no encontró leyes/NOMs en ese Sheet"); }
+        if(!state.tablas) state.tablas={}; state.tablas.tablaNoms=tn;
+        if(!state.anexos) state.anexos={}; state.anexos.noms=url.trim();
+        save(); renderForm();
+        toast("✓ "+tn.length+" ley/NOM(s) cargada(s) en II.1");
+      }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer normativo: "+e.message); }
     };
   }
 
@@ -1033,18 +1101,21 @@
       btn.onclick=async()=>{
         const fid=btn.dataset.tbtn, field=findField(fid); if(!field) return;
         const draw=document.querySelector('[data-tdraw="'+fid+'"]'); const datos_crudos=draw?draw.value.trim():"";
+        const urlInp=document.querySelector('[data-turl="'+fid+'"]'); const sheet_url=urlInp?urlInp.value.trim():"";
         const imgInp=document.querySelector('[data-timg="'+fid+'"]'); const file=imgInp&&imgInp.files[0];
         const status=document.querySelector('[data-tstatus="'+fid+'"]');
-        if(!datos_crudos && !file){ toast("Pega datos o adjunta una imagen primero"); return; }
+        if(!datos_crudos && !file && !sheet_url){ toast("Pega datos, un link de Sheets o adjunta una imagen primero"); return; }
         let imagen=null;
         if(file){ try{ const url=await fileToDataURL(file); const m=url.match(/^data:(.*?);base64,(.*)$/); if(m) imagen={media_type:m[1], data:m[2]}; }catch(e){} }
         btn.disabled=true; const prev=btn.textContent; btn.textContent="Estructurando…"; if(status) status.textContent=" Procesando con IA…";
         try{
-          const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"tabla", tablas:field.tablas, datos_crudos, imagen})});
+          const r=await fetch("/api/redactar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accion:"tabla", tablas:field.tablas, datos_crudos, imagen, sheet_url})});
           const j=await jsonOrError(r);
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
           if(!state.tablas) state.tablas={};
           Object.keys(j.tablas||{}).forEach(k=>{ if(Array.isArray(j.tablas[k])) state.tablas[k]=j.tablas[k]; });
+          // tablaBiota (flora/fauna) se sincroniza con el clip (VI. Anexos).
+          if(fid==="tablaBiota" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.flora_fauna=sheet_url; }
           save(); renderForm();
           toast("Tablas estructuradas ✓ — revisa el documento (III.4.3)");
         }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error IA: "+e.message); }
@@ -1060,22 +1131,26 @@
     const fileIco=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
     let items = docs.map(d=>{
       const link=(ax[d.id]!==undefined?ax[d.id]:d.link)||"";
+      const ok = !!link;
       const abrirBtn=link?`<a href="${esc(link)}" target="_blank" rel="noopener" class="ax-open">${driveIco} Abrir</a>`:"";
-      return `<div class="ax-item">
-        <div class="ax-top">
-          <div class="ax-file-ico">${fileIco}</div>
-          <div class="ax-info">
-            <div class="ax-nombre">${esc(d.nombre)}</div>
-            <div class="ax-usa">Usa en: ${esc(d.usa||"—")}</div>
+      return `<details class="ax-item">
+        <summary>
+          <span class="ax-dot ${ok?"ok":""}" title="${ok?"Link cargado":"Falta el link"}"></span>
+          <div class="ax-top">
+            <div class="ax-file-ico">${fileIco}</div>
+            <div class="ax-info">
+              <div class="ax-nombre">${esc(d.nombre)}</div>
+              <div class="ax-usa">Usa en: ${esc(d.usa||"—")}</div>
+            </div>
           </div>
-        </div>
+        </summary>
         <div class="ax-link-row">
-          <input class="ax-link" data-ax="${esc(d.id)}" value="${esc(link)}" placeholder="Enlace de Drive…">
+          <input class="ax-link" data-ax="${esc(d.id)}" value="${esc(link)}" placeholder="Enlace de Drive/Sheets…">
           ${abrirBtn}
         </div>
-      </div>`;
+      </details>`;
     }).join("");
-    return `<div class="ax-list">${items}<p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">Los enlaces se guardan por proyecto en este equipo. Se exportan con Guardar JSON.</p></div>`;
+    return `<div class="ax-list">${items}</div><p style="font-size:11px;color:var(--gris);margin-top:14px;line-height:1.5">🟢 = link cargado · 🟡 = falta. Pegar el link aquí lo refleja en su sección correspondiente, y viceversa. Los enlaces se guardan por proyecto en este equipo. Se exportan con Guardar JSON.</p>`;
   }
   function bindAnexos(){
     document.querySelectorAll("input.ax-link[data-ax]").forEach(inp=>{
@@ -1234,6 +1309,8 @@
       case "matrizImpactos": return renderMatrizImpactos(f);
       case "receptoresIA": return renderReceptoresIA(f);
       case "vigenciasIA": return renderVigenciasIA(f);
+      case "cumplimientoIA": return renderCumplimientoIA(f);
+      case "normativoIA": return renderNormativoIA(f);
       case "open": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note"><b>⚠ Pendiente manual.</b> ${esc(f.nota)}</div><textarea data-f="${f.id}" placeholder="(Opcional) Notas o texto para esta sección...">${esc(val)}</textarea></div>`;
       case "ia": return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
         `<div class="ia-row"><button type="button" class="ia-btn" data-ia="${esc(f.seccion)}" data-target="${esc(f.id)}" style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✨ Redactar con IA</button>`+
@@ -1256,7 +1333,10 @@
       case "tablaIA": {
         const t=state.tablas||{};
         const resumen=(f.tablas||[]).map(x=>`${x.titulo}: <b>${(t[x.key]||[]).length}</b> filas`).join(" · ");
+        // tablaBiota se sincroniza con el doc "flora_fauna" del clip (VI. Anexos).
+        const urlPrefill = f.id==="tablaBiota" ? (state.anexos && state.anexos.flora_fauna || "") : "";
         return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
+          `<input data-turl="${f.id}" value="${esc(urlPrefill)}" placeholder="(Opcional) Link de Google Sheets con los datos" style="margin-bottom:6px">`+
           `<textarea data-tdraw="${f.id}" placeholder="Pega aquí el listado / los datos crudos (texto)…" style="min-height:90px"></textarea>`+
           `<div class="ia-row" style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">`+
             `<label class="imglink" style="cursor:pointer">📷 Adjuntar imagen<input type="file" accept="image/*" data-timg="${f.id}" hidden></label>`+
@@ -1354,6 +1434,7 @@
   // encontrados. Colapsado por defecto (solo título + link); expandible.
   function renderProgramas(f){
     const list = state.programas || [];
+    const multiUrl = (state.anexos && state.anexos.programas) || "";
     const note = f.nota ? `<div class="open-note" style="margin-bottom:8px">${esc(f.nota)}</div>` : "";
     const cards = list.map((p,i)=>{
       const esCriterios = (p.incisos||[]).some(x=>x.aplica!==undefined);
@@ -1382,7 +1463,7 @@
         <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">📑 Leer TODAS las pestañas de un link (un programa por pestaña)</div>
         <div style="font-size:11.5px;color:var(--gris);margin-bottom:6px">Si el Sheet tiene varias pestañas (ej. POEGT, POEL, PMDU), cada una se agrega como su propio programa — la IA evalúa cada fila de criterios contra los datos del proyecto.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input data-prog-multi-url placeholder="Link de Google Sheets (con N pestañas)" style="flex:1;min-width:220px">
+          <input data-prog-multi-url value="${esc(multiUrl)}" placeholder="Link de Google Sheets (con N pestañas)" style="flex:1;min-width:220px">
           <button type="button" class="ia-btn" data-prog-multi-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📑 Leer todas las pestañas</button>
         </div>
         <span class="ia-status" data-prog-multi-status style="font-size:13px;color:var(--muted,#888)"></span>
@@ -1443,12 +1524,13 @@
   function renderMatrizImpactos(f){
     const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
     const cats = state.impactoCategorias||[];
+    const url = (state.anexos && state.anexos.matrices) || "";
     const resumen = cats.length
       ? `<div style="margin-top:6px;font-size:12.5px">✓ ${cats.length} categoría${cats.length===1?"":"s"} detectada${cats.length===1?"":"s"}: ${cats.map(c=>esc(c.nombre||"")).join(", ")}</div>`
       : "";
     return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        <input data-matriz-url placeholder="Link de Google Sheets de las matrices de impacto" style="flex:1;min-width:220px">
+        <input data-matriz-url value="${esc(url)}" placeholder="Link de Google Sheets de las matrices de impacto" style="flex:1;min-width:220px">
         <button type="button" class="ia-btn" data-matriz-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">🧩 Leer matriz con IA</button>
       </div>
       <span class="ia-status" data-matriz-status style="font-size:13px;color:var(--muted,#888)"></span>
@@ -1460,9 +1542,10 @@
   // mismas susDinamica de siempre) desde el Sheet de receptores sensibles.
   function renderReceptoresIA(f){
     const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const url = (state.anexos && state.anexos.receptores) || "";
     return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        <input data-receptores-url placeholder="Link de Google Sheets de receptores sensibles" style="flex:1;min-width:220px">
+        <input data-receptores-url value="${esc(url)}" placeholder="Link de Google Sheets de receptores sensibles" style="flex:1;min-width:220px">
         <button type="button" class="ia-btn" data-receptores-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📍 Llenar receptores con IA</button>
       </div>
       <span class="ia-status" data-receptores-status style="font-size:13px;color:var(--muted,#888)"></span>
@@ -1473,14 +1556,49 @@
   // (agregados, sin pisar los manuales, a la Tabla V.8).
   function renderVigenciasIA(f){
     const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const url = (state.anexos && state.anexos.vigencias) || "";
     const n = (state.tablas && state.tablas.tablaVigencias && state.tablas.tablaVigencias.length) || 0;
     const resumen = n ? `<div style="margin-top:6px;font-size:12.5px">✓ ${n} documento(s) cargados</div>` : "";
     return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        <input data-vigencias-url placeholder="Link de Google Sheets de vigencias documentales" style="flex:1;min-width:220px">
+        <input data-vigencias-url value="${esc(url)}" placeholder="Link de Google Sheets de vigencias documentales" style="flex:1;min-width:220px">
         <button type="button" class="ia-btn" data-vigencias-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">📋 Leer vigencias con IA</button>
       </div>
       <span class="ia-status" data-vigencias-status style="font-size:13px;color:var(--muted,#888)"></span>
+      ${resumen}
+    </div>`;
+  }
+
+  // II.1: tabla de cumplimiento normativo específico — sincronizada con el
+  // clip (VI. Anexos, doc "cumplimiento").
+  function renderCumplimientoIA(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const url = (state.anexos && state.anexos.cumplimiento) || "";
+    const n = (state.tablas && state.tablas.tablaCumplimiento && state.tablas.tablaCumplimiento.length) || 0;
+    const resumen = n ? `<div style="margin-top:6px;font-size:12.5px">✓ ${n} NOM(s) cargada(s)</div>` : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <input data-cumplimiento-url value="${esc(url)}" placeholder="Link de Google Sheets de cumplimiento normativo" style="flex:1;min-width:220px">
+        <button type="button" class="ia-btn" data-cumplimiento-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">✅ Leer cumplimiento con IA</button>
+      </div>
+      <span class="ia-status" data-cumplimiento-status style="font-size:13px;color:var(--muted,#888)"></span>
+      ${resumen}
+    </div>`;
+  }
+
+  // II.1: tabla de leyes y NOMs aplicables — sincronizada con el clip (VI.
+  // Anexos, doc "noms").
+  function renderNormativoIA(f){
+    const note = f.nota ? `<div class="open-note">${esc(f.nota)}</div>` : "";
+    const url = (state.anexos && state.anexos.noms) || "";
+    const n = (state.tablas && state.tablas.tablaNoms && state.tablas.tablaNoms.length) || 0;
+    const resumen = n ? `<div style="margin-top:6px;font-size:12.5px">✓ ${n} ley/NOM(s) cargada(s)</div>` : "";
+    return `<div class="field" data-fid="${esc(f.id)}"><label>${esc(f.l)} ${badge(f.b)}</label>${note}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <input data-normativo-url value="${esc(url)}" placeholder="Link de Google Sheets de leyes y NOMs aplicables" style="flex:1;min-width:220px">
+        <button type="button" class="ia-btn" data-normativo-btn style="background:#1a6dff;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">⚖️ Leer normativo con IA</button>
+      </div>
+      <span class="ia-status" data-normativo-status style="font-size:13px;color:var(--muted,#888)"></span>
       ${resumen}
     </div>`;
   }

@@ -155,6 +155,21 @@
     H(4, "II.1.7 Otros");
     if (J.otros) P(J.otros); else I("Ordenamientos estatales/municipales, DACG y condicionantes de permisos previos.");
 
+    // Cumplimiento normativo específico y leyes/NOMs aplicables del proyecto
+    // (state.tablas.tablaCumplimiento/tablaNoms, llenado desde "Leer
+    // cumplimiento/normativo (IA)") — verificación puntual del proyecto,
+    // complementa (no reemplaza) el marco legal general de arriba.
+    if (tFilled("tablaCumplimiento")) {
+      var HCUMP=["NOM","Descripción","Requisito clave","Cumple"];
+      TBL({ title:"Tabla — Cumplimiento normativo específico",
+            head:HCUMP, k:"auto", rows: tRows("tablaCumplimiento",HCUMP,1) });
+    }
+    if (tFilled("tablaNoms")) {
+      var HNOMS=["Ley","Descripción","Sector aplicable","Límite/Requisito","Vigente"];
+      TBL({ title:"Tabla — Leyes y NOMs aplicables",
+            head:HNOMS, k:"auto", rows: tRows("tablaNoms",HNOMS,1) });
+    }
+
     H(3, "II.2 Planes de desarrollo urbano y de ordenamiento ecológico");
     H(4, "II.2.1 Programa de Ordenamiento Ecológico General del Territorio (POEGT)");
     P(interp(D.BOILER.poegt_intro, v));
@@ -193,6 +208,7 @@
               head: ["Campo", "Valor"], k: rows.length ? "auto" : "scaffold",
               rows: rows.length ? rows : [["", ""]] });
       }
+      FIGAREA("progimg_" + i);
     });
 
     H(4, "II.2.2 Plan Nacional de Desarrollo");

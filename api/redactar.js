@@ -565,6 +565,22 @@ function chunkCSV(csv, rowsPerChunk) {
   return chunks;
 }
 
+// Algunos Sheets (ej. exports crudos de iNaturalist con miles de
+// observaciones) son demasiado grandes para mandarlos completos — se
+// muestrean uniformemente en vez de solo tomar las primeras N filas, para
+// conservar diversidad (especies distintas repartidas en todo el archivo, no
+// solo las capturadas primero).
+function muestrearCSV(csv, maxFilas) {
+  const lineas = String(csv).split(/\r?\n/);
+  const header = lineas[0] || "";
+  const filas = lineas.slice(1).filter((l) => l.trim());
+  if (filas.length <= maxFilas) return csv;
+  const paso = filas.length / maxFilas;
+  const muestra = [];
+  for (let i = 0; i < maxFilas; i++) muestra.push(filas[Math.floor(i * paso)]);
+  return header + "\n" + muestra.join("\n") + `\n[...muestreo: ${maxFilas} de ${filas.length} filas totales...]`;
+}
+
 async function extraerProgramasMulti({ sheet_url, datos }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
@@ -787,6 +803,81 @@ async function extraerVigencias({ sheet_url, datos_crudos, datos }) {
   };
 }
 
+// ── MODO "CUMPLIMIENTO" ─────────────────────────────────────────────────────
+// Lee el Sheet de cumplimiento normativo específico (NOM / Descripción /
+// Requisito clave / Cumple) y devuelve la tabla lista para II.1, mismo shape
+// "tablaIA" que usa tK/tRows.
+const SYSTEM_CUMPLIMIENTO =
+  "Eres un consultor ambiental senior que revisa el cumplimiento de Normas Oficiales Mexicanas " +
+  "aplicables a una estación de servicio para un Informe Preventivo ASEA. Escribe en español " +
+  "técnico formal, sin markdown. No inventes NOMs ni datos que no estén en la fuente. Devuelve " +
+  "ÚNICAMENTE JSON válido.";
+
+async function extraerCumplimiento({ sheet_url, datos_crudos, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${t.csv}`).join("");
+  }
+  if (!fuente.trim()) throw new Error("Pega el link de Google Sheets de cumplimiento normativo o los datos.");
+
+  const instruccion =
+    `${ctx(datos || {})}\n\n` +
+    "Esta fuente trae la evaluación de cumplimiento de NOMs específicas aplicables al proyecto. " +
+    "Devuelve \"tablaCumplimiento\": UN registro por cada NOM de la fuente (no omitas ninguna), con " +
+    "estas claves EXACTAS: { \"NOM\": \"...\", \"Descripción\": \"...\", \"Requisito clave\": \"...\", " +
+    "\"Cumple\": \"...\" }.\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"tablaCumplimiento\": [...] }\n\n" +
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su " +
+    "lugar; rompe el JSON.\n\n" +
+    `Fuente:\n${fuente}`;
+
+  const parsed = await llamarJSON(apiKey, SYSTEM_CUMPLIMIENTO, [{ type: "text", text: instruccion }], 6144, "cumplimiento");
+  return {
+    tablaCumplimiento: Array.isArray(parsed.tablaCumplimiento) ? parsed.tablaCumplimiento : [],
+  };
+}
+
+// ── MODO "NORMATIVO" ────────────────────────────────────────────────────────
+// Lee el Sheet de leyes y NOMs aplicables (Ley / Descripción / Sector
+// aplicable / Límite-Requisito / Vigente) y devuelve la tabla lista para
+// II.1, mismo shape "tablaIA" que usa tK/tRows.
+const SYSTEM_NORMATIVO =
+  "Eres un consultor ambiental senior que compila el marco normativo (leyes y NOMs) aplicable a " +
+  "una estación de servicio para un Informe Preventivo ASEA. Escribe en español técnico formal, " +
+  "sin markdown. No inventes leyes ni datos que no estén en la fuente. Devuelve ÚNICAMENTE JSON válido.";
+
+async function extraerNormativo({ sheet_url, datos_crudos, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+
+  let fuente = datos_crudos || "";
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${t.csv}`).join("");
+  }
+  if (!fuente.trim()) throw new Error("Pega el link de Google Sheets de leyes y NOMs aplicables o los datos.");
+
+  const instruccion =
+    `${ctx(datos || {})}\n\n` +
+    "Esta fuente trae el listado de leyes y NOMs aplicables al proyecto. Devuelve \"tablaNoms\": UN " +
+    "registro por cada ley/NOM de la fuente (no omitas ninguna), con estas claves EXACTAS: " +
+    "{ \"Ley\": \"...\", \"Descripción\": \"...\", \"Sector aplicable\": \"...\", " +
+    "\"Límite/Requisito\": \"...\", \"Vigente\": \"...\" }.\n\n" +
+    "Devuelve ÚNICAMENTE:\n{ \"tablaNoms\": [...] }\n\n" +
+    "Nunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su " +
+    "lugar; rompe el JSON.\n\n" +
+    `Fuente:\n${fuente}`;
+
+  const parsed = await llamarJSON(apiKey, SYSTEM_NORMATIVO, [{ type: "text", text: instruccion }], 6144, "normativo");
+  return {
+    tablaNoms: Array.isArray(parsed.tablaNoms) ? parsed.tablaNoms : [],
+  };
+}
+
 // ── MODO "PLANO" ───────────────────────────────────────────────────────────
 // Lee un plano del proyecto (PDF nativo — Claude soporta PDF directamente,
 // sin convertir a imagen) y en una sola llamada genera la redacción de
@@ -968,10 +1059,18 @@ const SYSTEM_TABLA =
   "texto adicional. No inventes datos: si un campo no aparece en la fuente, usa cadena vacía. " +
   "No limites el número de filas: incluye TODAS las que encuentres.";
 
-async function estructurarTabla({ tablas, datos_crudos, imagen }) {
+async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
   if (!Array.isArray(tablas) || !tablas.length) throw new Error("Faltan especificaciones de tabla.");
+
+  // Cualquier campo tablaIA puede opcionalmente traer un link de Google
+  // Sheets (ej. la base de flora/fauna) además de/en vez de texto pegado.
+  let fuente = datos_crudos || "";
+  if (sheet_url) {
+    const tabs = await fetchSheetTabs(sheet_url);
+    fuente += tabs.map((t) => `\n\n=== Pestaña: ${t.name} ===\n${muestrearCSV(t.csv, 600)}`).join("");
+  }
 
   const spec = tablas
     .map((t) => `- "${t.key}" (${t.titulo || t.key}): columnas [${(t.columnas || []).join(", ")}]`)
@@ -990,7 +1089,7 @@ async function estructurarTabla({ tablas, datos_crudos, imagen }) {
     `Reglas: una fila por registro; no inventes datos (campo vacío si no aparece en la fuente); ` +
     `incluye TODAS las filas encontradas, sin límite; nunca uses el símbolo " (comillas de ` +
     `pulgadas) dentro de ningún valor, escribe 'pulg' en su lugar — rompe el JSON.` +
-    (datos_crudos ? `\n\nDatos crudos:\n${datos_crudos}` : "");
+    (fuente ? `\n\nDatos crudos:\n${fuente}` : "");
 
   const content = [];
   if (imagen && imagen.data)
@@ -1063,6 +1162,16 @@ module.exports = async (req, res) => {
       res.status(200).json({ ok: true, ...out });
       return;
     }
+    if (body.accion === "cumplimiento") {
+      const out = await extraerCumplimiento(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
+    if (body.accion === "normativo") {
+      const out = await extraerNormativo(body);
+      res.status(200).json({ ok: true, ...out });
+      return;
+    }
     if (body.accion === "plano") {
       const out = await interpretarPlano(body);
       res.status(200).json({ ok: true, ...out });
@@ -1084,6 +1193,8 @@ module.exports.extraerProgramasMulti = extraerProgramasMulti;
 module.exports.extraerMatrices = extraerMatrices;
 module.exports.extraerReceptores = extraerReceptores;
 module.exports.extraerVigencias = extraerVigencias;
+module.exports.extraerCumplimiento = extraerCumplimiento;
+module.exports.extraerNormativo = extraerNormativo;
 module.exports.interpretarPlano = interpretarPlano;
 module.exports.limpiarMarkdown = limpiarMarkdown;
 module.exports.fetchSheetTabs = fetchSheetTabs;
