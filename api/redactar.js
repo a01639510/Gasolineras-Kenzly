@@ -1631,8 +1631,21 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
     const chunks = chunkCSV(csv, filasPorChunk);
     const resultados = await Promise.all(
       chunks.map((chunk, idx) => {
-        const bloque = (contextoExtra ? contextoExtra + "\n\n" : "") + `=== ${prefijoBloque} (parte ${idx + 1}/${chunks.length}) ===\n${chunk}`;
+        // Cuenta las filas de datos que trae ESTE chunk (sin encabezado) y
+        // lo hace explícito en la instrucción — refuerza "incluye TODAS las
+        // filas" con un número concreto que el modelo puede autoverificar,
+        // en vez de confiar solo en la regla genérica (que un modelo puede
+        // incumplir "de oído" en tablas largas, sobre todo con Haiku).
+        const nFilasChunk = chunk.split(/\r?\n/).filter((l) => l.trim()).length - 1;
+        const bloque = (contextoExtra ? contextoExtra + "\n\n" : "") +
+          `=== ${prefijoBloque} (parte ${idx + 1}/${chunks.length} — trae EXACTAMENTE ${nFilasChunk} filas de datos; ` +
+          `tu respuesta debe incluir las ${nFilasChunk}, ninguna de más ni de menos) ===\n${chunk}`;
         return llamarJSONConReintento(apiKey, SYSTEM_TABLA, [{ type: "text", text: buildInstruccion(bloque) }], 8192, `${etiqueta}:${idx + 1}/${chunks.length}`, model)
+          .then((r) => {
+            const nDevueltas = tablas.reduce((s, t) => s + (Array.isArray(r[t.key]) ? r[t.key].length : 0), 0);
+            if (nDevueltas < nFilasChunk) console.error(`[tabla] ${etiqueta} parte ${idx + 1}/${chunks.length}: esperaba ${nFilasChunk} filas, devolvió ${nDevueltas}`);
+            return r;
+          })
           .catch((e) => { console.error(`[tabla] falló ${etiqueta} parte ${idx + 1}/${chunks.length}:`, e.message); return null; });
       })
     );
@@ -1663,9 +1676,12 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
     fuente += (fuente ? "\n\n" : "") + `=== Especies ===\n${especiesCSV}`;
   } else {
     // Tabla no-especie (mecánica): si trae muchas filas (ej. POEL con
-    // decenas/cientos de UGAs), fragmenta igual con chunks más grandes
-    // (Haiku es rápido y esto no requiere razonamiento por fila).
-    const FILAS_POR_CHUNK_TABLA = 60;
+    // decenas/cientos de UGAs), fragmenta igual. Chunks chicos (30): con
+    // menos filas por llamada es menos probable que el modelo "resuma" o se
+    // salte alguna en vez de transcribirlas todas — y ya no compite por
+    // tiempo con la evaluación de incisos (esa pestaña se excluye de ese
+    // camino, ver extraerProgramasMulti), así que hay margen de sobra.
+    const FILAS_POR_CHUNK_TABLA = 30;
     const nLineasFuente = fuente ? fuente.split(/\r?\n/).filter((l) => l.trim()).length - 1 : 0;
     if (nLineasFuente > FILAS_POR_CHUNK_TABLA) {
       const combinado = await procesarEnChunks(fuente, FILAS_POR_CHUNK_TABLA, modelTabla, "tabla:fragmento", "Datos");
