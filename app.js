@@ -344,16 +344,20 @@
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
       {id:"tablaAcuifero", l:"III.4.2e Acuífero (fuente: CONAGUA — DOF disponibilidad)", tipo:"susDinamica", b:"cerrada",
         cols:[{k:"param",l:"Parámetro",w:220},{k:"val",l:"Valor",w:280}]},
-      // III.4.3 Bióticos — IA + tablaIA (bibliográfico) + tablas de campo
+      // III.4.3 Bióticos — IA + tablaIA (bibliográfico, flora y fauna como fuentes separadas) + tablas de campo
       {id:"iaFloraFauna", l:"III.4.3 Flora y fauna — redacción con IA", tipo:"ia", seccion:"flora_fauna", b:"abierta",
         nota:"Genera el diagnóstico biótico (vegetación + fauna NOM-059) con IA. Editable; se inserta en III.4.3."},
-      {id:"tablaBiota", l:"Listados bibliográficos (Tablas III.15–III.18) — llenar con IA", tipo:"tablaIA", b:"abierta",
-        nota:"Pega listado de especies de CONABIO/Enciclovida (o imagen) y la IA llena las 4 tablas bibliográficas SIN límite de filas.",
+      {id:"tablaFloraBib", l:"Tabla III.15 — Listado bibliográfico de flora — llenar con IA", tipo:"tablaIA", b:"abierta",
+        nota:"Pega listado de flora de CONABIO/Enciclovida (o imagen), o el link de Google Sheets de FLORA, y la IA llena la tabla SIN límite de filas.",
         tablas:[
-          {key:"tablaFlora",     titulo:"Flora (bibliográfica — CONABIO/Enciclovida)",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaMamiferos", titulo:"Mamíferos (bibliográfico — SNIB/Enciclovida)",               columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaAvifauna",  titulo:"Avifauna (bibliográfica — SNIB/Enciclovida)",                columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
-          {key:"tablaHerpeto",   titulo:"Anfibios y reptiles (bibliográfico — SNIB/Enciclovida)",     columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
+          {key:"tablaFlora", titulo:"Flora (bibliográfica — CONABIO/Enciclovida)", columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
+        ]},
+      {id:"tablaFaunaBib", l:"Tablas III.16–III.18 — Listados bibliográficos de fauna — llenar con IA", tipo:"tablaIA", b:"abierta",
+        nota:"Pega listado de fauna de SNIB/Enciclovida (o imagen), o el link de Google Sheets de FAUNA, y la IA llena las 3 tablas bibliográficas SIN límite de filas.",
+        tablas:[
+          {key:"tablaMamiferos", titulo:"Mamíferos (bibliográfico — SNIB/Enciclovida)",           columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaAvifauna",  titulo:"Avifauna (bibliográfica — SNIB/Enciclovida)",            columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]},
+          {key:"tablaHerpeto",   titulo:"Anfibios y reptiles (bibliográfico — SNIB/Enciclovida)",  columnas:["Familia","Nombre científico","Nombre común","NOM-059-SEMARNAT"]}
         ]},
       {id:"tablaFloraObservada", l:"III.4.3 Flora observada en campo (registro directo en predio)", tipo:"susDinamica", b:"cerrada",
         nota:"Especies efectivamente observadas en predio y colindancias. Complementa el listado bibliográfico.",
@@ -1111,9 +1115,11 @@
     document.querySelectorAll("input[type=file][data-timg]").forEach(inp=>{
       inp.onchange=()=>{ const f=inp.files[0]; const lbl=document.querySelector('[data-tdimg-name="'+inp.dataset.timg+'"]'); if(lbl) lbl.textContent=f?("📷 "+f.name):""; };
     });
-    // tablaBiota (flora/fauna) es el único campo tablaIA sincronizado con el clip.
-    const biotaUrlInp=document.querySelector('[data-turl="tablaBiota"]');
-    if(biotaUrlInp) biotaUrlInp.oninput=()=> syncAnexoLink("flora_fauna", biotaUrlInp.value);
+    // tablaFloraBib / tablaFaunaBib son los campos tablaIA sincronizados con el clip.
+    const floraUrlInp=document.querySelector('[data-turl="tablaFloraBib"]');
+    if(floraUrlInp) floraUrlInp.oninput=()=> syncAnexoLink("flora", floraUrlInp.value);
+    const faunaUrlInp=document.querySelector('[data-turl="tablaFaunaBib"]');
+    if(faunaUrlInp) faunaUrlInp.oninput=()=> syncAnexoLink("fauna", faunaUrlInp.value);
     document.querySelectorAll("[data-tbtn]").forEach(btn=>{
       btn.onclick=async()=>{
         const fid=btn.dataset.tbtn, field=findField(fid); if(!field) return;
@@ -1131,8 +1137,9 @@
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
           if(!state.tablas) state.tablas={};
           Object.keys(j.tablas||{}).forEach(k=>{ if(Array.isArray(j.tablas[k])) state.tablas[k]=j.tablas[k]; });
-          // tablaBiota (flora/fauna) se sincroniza con el clip (VI. Anexos).
-          if(fid==="tablaBiota" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.flora_fauna=sheet_url; }
+          // tablaFloraBib / tablaFaunaBib se sincronizan con el clip (VI. Anexos).
+          if(fid==="tablaFloraBib" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.flora=sheet_url; }
+          if(fid==="tablaFaunaBib" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.fauna=sheet_url; }
           save(); renderForm();
           toast("Tablas estructuradas ✓ — revisa el documento (III.4.3)");
         }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error IA: "+e.message); }
@@ -1179,7 +1186,8 @@
   const ANEXO_FIELD_SEL = {
     recopilacion: "[data-imp-url]",
     programas: "[data-prog-multi-url]",
-    flora_fauna: '[data-turl="tablaBiota"]',
+    flora: '[data-turl="tablaFloraBib"]',
+    fauna: '[data-turl="tablaFaunaBib"]',
     matrices: "[data-matriz-url]",
     cumplimiento: "[data-cumplimiento-url]",
     noms: "[data-normativo-url]",
@@ -1391,8 +1399,9 @@
       case "tablaIA": {
         const t=state.tablas||{};
         const resumen=(f.tablas||[]).map(x=>`${x.titulo}: <b>${(t[x.key]||[]).length}</b> filas`).join(" · ");
-        // tablaBiota se sincroniza con el doc "flora_fauna" del clip (VI. Anexos).
-        const urlPrefill = f.id==="tablaBiota" ? (state.anexos && state.anexos.flora_fauna || "") : "";
+        // tablaFloraBib/tablaFaunaBib se sincronizan con sus docs "flora"/"fauna" del clip (VI. Anexos).
+        const urlPrefill = f.id==="tablaFloraBib" ? (state.anexos && state.anexos.flora || "")
+          : f.id==="tablaFaunaBib" ? (state.anexos && state.anexos.fauna || "") : "";
         return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
           `<input data-turl="${f.id}" value="${esc(urlPrefill)}" placeholder="(Opcional) Link de Google Sheets con los datos" style="margin-bottom:6px">`+
           `<textarea data-tdraw="${f.id}" placeholder="Pega aquí el listado / los datos crudos (texto)…" style="min-height:90px"></textarea>`+

@@ -68,16 +68,16 @@ Cada una de las 15 tablas siguientes tiene columnas fijas — la IA debe encajar
 | `tablaTuberias` | III.1.7 | Fluido/Servicio · Ø Nominal · Material · Tipo de instalación · Profundidad · Pendiente · Prueba/Dictamen · Observaciones |
 | `tablaExtintores` | III.1.7 | No. · Ubicación · Tipo · Capacidad · Evidencia |
 | `tablaDistancias` | III.1.7 | Elemento · Distancia requerida (m) · Distancia de proyecto (m) · Cumple |
-| `tablaFlora` | III.4.3 | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
-| `tablaMamiferos` | III.4.3 | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
-| `tablaAvifauna` | III.4.3 | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
-| `tablaHerpeto` | III.4.3 | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
+| `tablaFlora` | III.4.3 (campo `tablaFloraBib`, fuente: Sheet **FLORA**) | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
+| `tablaMamiferos` | III.4.3 (campo `tablaFaunaBib`, fuente: Sheet **FAUNA**) | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
+| `tablaAvifauna` | III.4.3 (campo `tablaFaunaBib`, fuente: Sheet **FAUNA**) | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
+| `tablaHerpeto` | III.4.3 (campo `tablaFaunaBib`, fuente: Sheet **FAUNA**) | Familia · Nombre científico · Nombre común · NOM-059-SEMARNAT |
 | `tablaMedidasPrep` | III.6 (preparación/construcción) | Factor ambiental · Impacto/fuente · Medida de prevención/mitigación · Programa y responsable · NOM/marco legal · Resultado/impacto residual |
 | `tablaMedidasOper` | III.6 (operación) | *(mismas columnas que `tablaMedidasPrep`)* |
 | `tablaMedidasAband` | III.6 (abandono) | *(mismas columnas que `tablaMedidasPrep`)* |
 | `tablaVigilancia` | III.6.1 | Etapa · Acción de vigilancia · Indicador verificable · Frecuencia · Responsable |
 
-**Entrada aceptada:** texto pegado y/o una imagen por tabla (no acepta link de Sheets en este modo). **Sin límite de filas** — a diferencia del autollenado de campos sueltos, aquí se incluyen *todas* las filas que la IA encuentre.
+**Entrada aceptada:** texto pegado y/o una imagen por tabla. **Excepción — las 4 tablas bióticas** (`tablaFlora`, `tablaMamiferos`, `tablaAvifauna`, `tablaHerpeto`): además de texto/imagen, aceptan un **link de Google Sheets** propio por campo — `tablaFloraBib` lee el Sheet de **FLORA** y llena solo `tablaFlora`; `tablaFaunaBib` lee el Sheet de **FAUNA** (una pestaña por grupo: mamíferos/avifauna/herpetofauna) y llena las otras 3. Son dos fuentes independientes desde julio 2026 (antes era un único Sheet combinado) — cada una se pega en su propio campo del cuestionario y en su propia fila del catálogo de Anexos (`BASE DE DATOS FLORA` / `BASE DE DATOS FAUNA`). Los listados grandes de especies se fragmentan y se envían en paralelo a la IA para no exceder el límite de 60s de Vercel Hobby. **Sin límite de filas** en ningún caso — a diferencia del autollenado de campos sueltos, aquí se incluyen *todas* las filas que la IA encuentre.
 
 **Campos obligatorios:** ninguno a nivel del sistema; una tabla vacía simplemente se muestra como "por llenar" (`k:"scaffold"`) en el documento final en vez de aparecer con datos.
 
