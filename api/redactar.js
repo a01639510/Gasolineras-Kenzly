@@ -446,17 +446,22 @@ async function llamarJSON(apiKey, system, content, maxTokens, etiqueta, model) {
   }
 }
 
-// Reintenta UNA vez ante un fallo transitorio (rate limit, red, respuesta
-// truncada por congestión) antes de darse por vencido. Usado en llamadas que
-// van muchas a la vez en paralelo (chunks de especies, categorías de la
-// matriz) — ahí un fallo aislado es más probable que en una llamada única, y
-// perder un pedazo obliga a rehacer todo el flujo desde la app.
+// Reintenta UNA vez ante un fallo antes de darse por vencido. Usado en
+// llamadas que van muchas a la vez en paralelo (chunks de especies/tablas,
+// categorías de la matriz) — ahí un fallo aislado es más probable que en una
+// llamada única, y perder un pedazo obliga a rehacer todo el flujo desde la
+// app. Si el fallo fue por TRUNCAMIENTO (la respuesta necesitaba más
+// max_tokens de los que se le dieron — ej. una categoría con muchos
+// impactos distintos que narrar) el reintento duplica el límite en vez de
+// repetir la misma llamada con el mismo tope, que fallaría igual siempre.
 async function llamarJSONConReintento(apiKey, system, content, maxTokens, etiqueta, model) {
   try {
     return await llamarJSON(apiKey, system, content, maxTokens, etiqueta, model);
   } catch (e) {
-    console.error(`[${etiqueta}] intento 1 falló (${e.message}) — reintentando…`);
-    return llamarJSON(apiKey, system, content, maxTokens, etiqueta + ":retry", model);
+    const truncado = /l[ií]mite de longitud/i.test(e.message);
+    const maxTokensReintento = truncado ? Math.min(maxTokens * 2, 8192) : maxTokens;
+    console.error(`[${etiqueta}] intento 1 falló (${e.message}) — reintentando${truncado ? ` con max_tokens=${maxTokensReintento}` : ""}…`);
+    return llamarJSON(apiKey, system, content, maxTokensReintento, etiqueta + ":retry", model);
   }
 }
 
@@ -690,12 +695,20 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
   const contexto = ctx(datos || {});
   const ROWS_PER_CHUNK = 10;
 
-  // Aplana TODAS las pestañas en tareas pequeñas (pestaña + fragmento de ~10
-  // filas) y las dispara TODAS a la vez en un solo Promise.all — el tiempo
-  // total pasa a ser el del fragmento más lento (segundos), no el de la
-  // pestaña más grande completa (que podía pasarse de 60s con 41 filas).
+  // Aplana TODAS las pestañas EXCEPTO las que ya van a su propia tabla
+  // estructurada (POEL/Plan Municipal, ver TABLA_POR_PESTANA_PROGRAMA más
+  // abajo) en tareas pequeñas (pestaña + fragmento de ~10 filas) y las
+  // dispara TODAS a la vez en un solo Promise.all — el tiempo total pasa a
+  // ser el del fragmento más lento (segundos), no el de la pestaña más
+  // grande completa (que podía pasarse de 60s con 41 filas). Evaluar
+  // "aplica sí/no/parcial" fila por fila NO tiene sentido sobre una tabla de
+  // zonificación UGA (POEL) o de criterios del plan municipal — esas
+  // pestañas suelen ser además las más grandes del Sheet, así que
+  // excluirlas de este camino también es lo que evitaba el timeout de 60s
+  // al combinarse con su propia extracción estructurada (ver más abajo).
   const tareas = [];
   tabs.forEach((tab) => {
+    if (TABLA_POR_PESTANA_PROGRAMA.some((cat) => cat.patron.test(tab.name))) return;
     const chunks = chunkCSV(tab.csv, ROWS_PER_CHUNK);
     chunks.forEach((csvFragmento, i) => {
       tareas.push({ nombre: tab.name, indice: i + 1, total: chunks.length, csv: csvFragmento });
@@ -1073,7 +1086,7 @@ async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV) {
         llamarJSONConReintento(
           apiKey, SYSTEM_MATRICES_CAT,
           [{ type: "text", text: buildInstruccion(chunk, ` — parte ${idx + 1}/${chunks.length}`) }],
-          2048, `matrices:${nombreCrudo}:${idx + 1}/${chunks.length}`, MODEL_HAIKU
+          3072, `matrices:${nombreCrudo}:${idx + 1}/${chunks.length}`, MODEL_HAIKU
         ).catch((e) => { console.error(`[matrices] falló ${nombreCrudo} parte ${idx + 1}:`, e.message); return null; })
       )
     );
@@ -1084,7 +1097,7 @@ async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV) {
 
   const parsed = await llamarJSONConReintento(
     apiKey, SYSTEM_MATRICES_CAT, [{ type: "text", text: buildInstruccion(tablaCSV, "") }],
-    2048, `matrices:${nombreCrudo}`, MODEL_HAIKU
+    3072, `matrices:${nombreCrudo}`, MODEL_HAIKU
   ).catch((e) => { console.error(`[matrices] falló ${nombreCrudo}:`, e.message); return null; });
   if (!parsed || !Array.isArray(parsed.narrativa) || !parsed.narrativa.length) return null;
   return { nombre: parsed.nombre || nombre, narrativa: parsed.narrativa };
