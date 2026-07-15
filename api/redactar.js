@@ -652,6 +652,19 @@ function podarListaEspecies(csv) {
   return { csv: salida, especies: vistos.size };
 }
 
+// Pestañas del Sheet multi-programa (POEGT/POE Estatal/POEL/PDUM/...) que
+// ADEMÁS de la evaluación genérica de incisos/aplicabilidad (que ya corre
+// para TODAS las pestañas, ver abajo) alimentan una tabla estructurada del
+// cuestionario — la IA localiza la pestaña correcta por su NOMBRE; no hace
+// falta un documento ni un link separado por categoría. Agregar una
+// categoría nueva es solo agregar una entrada aquí.
+const TABLA_POR_PESTANA_PROGRAMA = [
+  { patron: /poel/i, tablas: [{ key: "tablaPOEL", titulo: "POEL — UGA del municipio",
+      columnas: ["Clave UGA", "Nombre UGA", "Política territorial", "Uso predominante", "Uso condicionado", "Uso incompatible"] }] },
+  { patron: /plan\s*municipal|municipal/i, tablas: [{ key: "tablaPlanMunicipal", titulo: "Vinculación con criterios del Plan Municipal",
+      columnas: ["Criterio", "Descripción", "Relación directa con el proyecto"] }] },
+];
+
 async function extraerProgramasMulti({ sheet_url, datos }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
@@ -675,7 +688,7 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
     });
   });
 
-  const resultados = await Promise.all(tareas.map(async (t) => {
+  const incisosPromise = Promise.all(tareas.map(async (t) => {
     const instruccion =
       `${contexto}\n\n` +
       `Estás evaluando el programa/instrumento "${t.nombre}" para este proyecto (fragmento ${t.indice}` +
@@ -706,6 +719,26 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
     }
   }));
 
+  // En paralelo con lo anterior (no en serie, para no sumar tiempos): por
+  // cada pestaña cuyo NOMBRE coincida con una categoría de
+  // TABLA_POR_PESTANA_PROGRAMA (ej. "POEL"), estructura esa pestaña completa
+  // en su tabla del cuestionario — misma mecánica que estructurarTabla()
+  // usa para flora/fauna/tanques, aquí reutilizada sobre el CSV ya
+  // descargado (sin volver a pedir un link aparte).
+  const tareasTablas = [];
+  tabs.forEach((tab) => {
+    TABLA_POR_PESTANA_PROGRAMA.forEach((cat) => {
+      if (cat.patron.test(tab.name)) tareasTablas.push({ tab, cat });
+    });
+  });
+  const tablasPromise = Promise.all(tareasTablas.map(({ tab, cat }) =>
+    estructurarTabla({ tablas: cat.tablas, datos_crudos: tab.csv, imagen: null, sheet_url: null })
+      .then((r) => r.tablas || {})
+      .catch((e) => { console.error(`[programas_multi] falló tabla de pestaña "${tab.name}":`, e.message); return {}; })
+  ));
+
+  const [resultados, resultadosTablas] = await Promise.all([incisosPromise, tablasPromise]);
+
   // Reensambla por pestaña, en el mismo orden en que aparecen en el Sheet.
   const porTab = {};
   resultados.forEach((r) => {
@@ -715,10 +748,15 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
   });
   const programas = tabs.map((tab) => porTab[tab.name] || { nombre: tab.name, incisos: [], estrategias: [] });
 
-  if (!programas.some((p) => p.incisos.length)) {
+  const tablas = {};
+  resultadosTablas.forEach((t) => {
+    Object.keys(t).forEach((k) => { if (Array.isArray(t[k]) && t[k].length) tablas[k] = t[k]; });
+  });
+
+  if (!programas.some((p) => p.incisos.length) && !Object.keys(tablas).length) {
     throw new Error("La IA no pudo procesar ninguna pestaña del Sheet. Intenta de nuevo.");
   }
-  return { programas };
+  return { programas, tablas };
 }
 
 // ── MODO "MATRICES" ─────────────────────────────────────────────────────────
@@ -751,7 +789,34 @@ const NOMBRE_SUBSISTEMA = {
   SOCIOECON: "Medio socioeconómico",
   "SOCIOECONÓMICO": "Medio socioeconómico",
 };
+// Etiquetas EXACTAS de D.IMPACTOS_BALANCE_DEFAULT (data.js) — para que las
+// filas calculadas encajen con las filas por defecto de la Tabla III.26.
+const MEDIO_BALANCE = {
+  "ABIÓTICO": "Físico (suelo, agua, aire, ruido)",
+  ABIOTICO: "Físico (suelo, agua, aire, ruido)",
+  "BIÓTICO": "Biótico (flora, fauna)",
+  BIOTICO: "Biótico (flora, fauna)",
+  "SOCIOECON.": "Socioeconómico y perceptual",
+  SOCIOECON: "Socioeconómico y perceptual",
+  "SOCIOECONÓMICO": "Socioeconómico y perceptual",
+};
 const ORDEN_SUBSISTEMA = ["ABIÓTICO", "ABIOTICO", "BIÓTICO", "BIOTICO", "SOCIOECON.", "SOCIOECON", "SOCIOECONÓMICO"];
+
+// Etiquetas EXACTAS de D.IMPACTOS_RESUMEN_DEFAULT (data.js) — normaliza el
+// texto de Etapa que traiga la hoja (puede variar entre proyectos) a las 3
+// etapas fijas de la Tabla III.25.
+const ETAPA_CANONICA = [
+  { patron: /preparaci|construcci/i, nombre: "Preparación de sitio y construcción" },
+  { patron: /operaci|mantenimiento/i, nombre: "Operación y mantenimiento" },
+  { patron: /aband/i, nombre: "Abandono de sitio" },
+];
+function normalizarEtapa(raw) {
+  const e = ETAPA_CANONICA.find((x) => x.patron.test(raw));
+  return e ? e.nombre : (raw || "").trim() || "Otra";
+}
+function tituloClase(c) {
+  return String(c || "").toLowerCase().split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("-");
+}
 
 function detectarColumna(header, patrones) {
   for (const pat of patrones) {
@@ -785,13 +850,15 @@ function parseCSVRows(text) {
   return rows;
 }
 
-// Agrupa las filas de la pestaña "Matriz de Resultados" por Subsistema,
-// filtrando a Clase != BAJO. Devuelve { nombreSubsistema: csvCompacto } con
-// solo las columnas relevantes para narrar (nada de M/E/D/R/P/A/S/III/IB/C/IC
-// crudos: esos son insumos de la fórmula, no algo que el texto deba citar).
-// Devuelve null si la hoja no trae Clase+Subsistema (plantilla distinta) para
-// que el llamador caiga al camino genérico.
-function agruparMatrizResultados(csv) {
+// Parsea la pestaña "Matriz de Resultados" a un arreglo de filas normalizadas
+// (una por interacción acción×factor). Devuelve null si la hoja no trae
+// Clase+Subsistema (plantilla distinta) para que el llamador caiga al camino
+// genérico. Esto se hace UNA sola vez; tanto la narrativa (III.5.7) como las
+// 3 tablas calculadas (III.25/25b/26, ver más abajo) reusan este arreglo —
+// sin volver a parsear ni gastar una sola llamada IA extra en ellas: los
+// índices (ISIG, Clase) ya vienen calculados por el propio Sheet, así que
+// agruparlos/sumarlos es aritmética determinista, no algo que requiera IA.
+function parseFilasMatrizResultados(csv) {
   const filas = parseCSVRows(csv).filter((r) => r.some((c) => c.trim()));
   if (filas.length < 2) return null;
   const headerIdx = filas.findIndex((r) => r.some((c) => /^etapa$/i.test(c.trim())));
@@ -800,9 +867,18 @@ function agruparMatrizResultados(csv) {
 
   const idx = {
     etapa: detectarColumna(header, [/^etapa$/i]),
+    codAccion: detectarColumna(header, [/c[oó]d\.?\s*acci[oó]n/i]),
     accion: detectarColumna(header, [/acci[oó]n del proyecto/i, /^acci[oó]n$/i]),
+    codFactor: detectarColumna(header, [/c[oó]d\.?\s*factor/i]),
     factor: detectarColumna(header, [/factor ambiental/i]),
     atributo: detectarColumna(header, [/atributo/i]),
+    m: detectarColumna(header, [/^m\b/i]),
+    e: detectarColumna(header, [/^e\b/i]),
+    d: detectarColumna(header, [/^d\b/i]),
+    r: detectarColumna(header, [/^r\b/i]),
+    p: detectarColumna(header, [/^p\b/i]),
+    a: detectarColumna(header, [/^a\b/i]),
+    s: detectarColumna(header, [/^s\b/i]),
     isig: detectarColumna(header, [/isig.*signad/i, /isig/i]),
     clase: detectarColumna(header, [/^clase/i]),
     medida: detectarColumna(header, [/medida/i]),
@@ -812,27 +888,44 @@ function agruparMatrizResultados(csv) {
   };
   if (idx.clase < 0 || idx.subsistema < 0) return null;
 
+  const val = (r, k) => (idx[k] >= 0 ? (r[idx[k]] || "").replace(/\s*[\r\n]+\s*/g, " ").trim() : "");
+  const filasOut = [];
+  for (let i = headerIdx + 1; i < filas.length; i++) {
+    const r = filas[i];
+    const clase = val(r, "clase"), subsistema = val(r, "subsistema");
+    if (!clase || !subsistema) continue;
+    filasOut.push({
+      etapa: val(r, "etapa"), codAccion: val(r, "codAccion"), accion: val(r, "accion"),
+      codFactor: val(r, "codFactor"), factor: val(r, "factor"), atributo: val(r, "atributo"),
+      m: val(r, "m"), e: val(r, "e"), d: val(r, "d"), rr: val(r, "r"), p: val(r, "p"), a: val(r, "a"), s: val(r, "s"),
+      isig: val(r, "isig"), clase, medida: val(r, "medida"), norma: val(r, "norma"), plazo: val(r, "plazo"), subsistema,
+    });
+  }
+  return filasOut.length ? filasOut : null;
+}
+
+// Agrupa las filas YA parseadas por Subsistema, filtrando a Clase != BAJO —
+// esto es lo único que necesita la narrativa de III.5.7 (impactos "altos y
+// medios"). Devuelve { nombreSubsistema: csvCompacto } con solo las columnas
+// relevantes para narrar (nada de M/E/D/R/P/A/S/III/IB/C/IC crudos: esos son
+// insumos de la fórmula, no algo que el texto deba citar — sí van, en
+// cambio, íntegros en calcularTablaSignificativos() para la Tabla III.25b).
+function agruparNarrativaPorSubsistema(filas) {
   const cols = [
     ["etapa", "Etapa"], ["accion", "Acción"], ["factor", "Factor ambiental"],
     ["atributo", "Atributo del impacto"], ["isig", "ISIG (signo indica adverso/benéfico)"],
     ["clase", "Clase"], ["medida", "Medida de control"], ["norma", "NOM/normativa"], ["plazo", "Plazo"],
-  ].filter(([k]) => idx[k] >= 0);
+  ];
   const cabecera = cols.map(([, l]) => l).join(",");
 
   const grupos = {};
-  for (let i = headerIdx + 1; i < filas.length; i++) {
-    const r = filas[i];
-    const clase = (r[idx.clase] || "").trim();
-    const sub = (r[idx.subsistema] || "").trim();
-    if (!clase || !sub || /^bajo$/i.test(clase)) continue; // solo altos y medios
-    // Colapsa saltos de línea embebidos en la celda (raro, pero posible en
-    // "Medida"/"Norma" con formato manual) — chunkCSV()/el conteo de filas
-    // más abajo asumen una fila = una línea.
-    const fila = cols.map(([k]) => `"${(r[idx[k]] || "").replace(/\s*[\r\n]+\s*/g, " ").trim().replace(/"/g, "'")}"`).join(",");
-    (grupos[sub] = grupos[sub] || [cabecera]).push(fila);
-  }
+  filas.forEach((f) => {
+    if (/^bajo$/i.test(f.clase)) return; // solo altos y medios
+    const fila = cols.map(([k]) => `"${String(f[k] || "").replace(/"/g, "'")}"`).join(",");
+    (grupos[f.subsistema] = grupos[f.subsistema] || [cabecera]).push(fila);
+  });
   const nombres = Object.keys(grupos);
-  if (!nombres.length) return null;
+  if (!nombres.length) return {};
   nombres.sort((a, b) => {
     const ia = ORDEN_SUBSISTEMA.indexOf(a), ib = ORDEN_SUBSISTEMA.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -840,6 +933,86 @@ function agruparMatrizResultados(csv) {
   const salida = {};
   nombres.forEach((n) => { salida[n] = grupos[n].join("\n"); });
   return salida;
+}
+
+// ── Tablas III.25 / III.25b / III.26 — cálculo determinista ────────────────
+// Las 3 tablas que documento.js espera para III.5.6/III.5.8 (ver
+// app.js: tablaImpactosResumen/tablaImpactosSignificativos/tablaImpactosBalance)
+// son sumatorias/conteos sobre columnas que la propia hoja ya calculó (ISIG,
+// Clase) — no requieren IA, solo agrupar y sumar. Esto además es 100% exacto
+// (cero riesgo de que la IA invente o redondee mal una cifra).
+
+// III.25 — conteo de impactos +/- por etapa.
+function calcularTablaResumen(filas) {
+  const grupos = {};
+  filas.forEach((f) => {
+    const etapa = normalizarEtapa(f.etapa);
+    const g = (grupos[etapa] = grupos[etapa] || { pos: 0, neg: 0 });
+    const v = parseFloat(f.isig) || 0;
+    if (v > 0) g.pos++; else if (v < 0) g.neg++;
+  });
+  const orden = ETAPA_CANONICA.map((e) => e.nombre);
+  const nombres = Object.keys(grupos).sort((a, b) => {
+    const ia = orden.indexOf(a), ib = orden.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const out = nombres.map((etapa) => ({
+    etapa, positivos: String(grupos[etapa].pos), negativos: String(grupos[etapa].neg),
+    total: String(grupos[etapa].pos + grupos[etapa].neg),
+  }));
+  const tot = out.reduce((acc, r) => ({ pos: acc.pos + Number(r.positivos), neg: acc.neg + Number(r.negativos) }), { pos: 0, neg: 0 });
+  out.push({ etapa: "Total", positivos: String(tot.pos), negativos: String(tot.neg), total: String(tot.pos + tot.neg) });
+  return out;
+}
+
+// III.25b — impactos con |ISIG| ≥ 40 (medio-alto/alto y el tramo superior de
+// medio), con los criterios Gómez-Orea crudos (M/E/D/R/P/A/S) tal como los
+// trae la hoja.
+function calcularTablaSignificativos(filas) {
+  return filas
+    .filter((f) => Math.abs(parseFloat(f.isig) || 0) >= 40)
+    .sort((a, b) => Math.abs(parseFloat(b.isig) || 0) - Math.abs(parseFloat(a.isig) || 0))
+    .map((f) => ({
+      codigo: [f.codAccion, f.codFactor].filter(Boolean).join(" · "),
+      accion: f.accion, factor: f.factor,
+      m: f.m, e: f.e, d: f.d, r: f.rr, p: f.p, a: f.a, s: f.s,
+      isig: f.isig, semaforo: tituloClase(f.clase), desc: f.atributo,
+    }));
+}
+
+// III.26 — balance de ISIG (+/−) y conteo de impactos altos/medios por medio
+// ambiental (Subsistema), sumado a través de TODAS las etapas.
+function calcularTablaBalance(filas) {
+  const grupos = {};
+  filas.forEach((f) => {
+    const medio = MEDIO_BALANCE[f.subsistema] || f.subsistema;
+    const g = (grupos[medio] = grupos[medio] || { sigNeg: 0, sigPos: 0, altos: 0, medios: 0 });
+    const v = parseFloat(f.isig) || 0;
+    if (v < 0) g.sigNeg += Math.abs(v); else if (v > 0) g.sigPos += v;
+    const clase = f.clase.toUpperCase();
+    if (clase === "ALTO" || clase === "MEDIO-ALTO") g.altos++;
+    else if (clase === "MEDIO") g.medios++;
+  });
+  const orden = ["ABIÓTICO", "BIÓTICO", "SOCIOECON."].map((k) => MEDIO_BALANCE[k]);
+  const nombres = Object.keys(grupos).sort((a, b) => {
+    const ia = orden.indexOf(a), ib = orden.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const fmt = (n) => String(Math.round(n * 10) / 10);
+  const out = nombres.map((medio) => ({
+    medio, sig_neg: fmt(grupos[medio].sigNeg), sig_pos: fmt(grupos[medio].sigPos),
+    balance: fmt(grupos[medio].sigPos - grupos[medio].sigNeg),
+    altos: String(grupos[medio].altos), medios: String(grupos[medio].medios),
+  }));
+  const tot = out.reduce((acc, r) => ({
+    sigNeg: acc.sigNeg + Number(r.sig_neg), sigPos: acc.sigPos + Number(r.sig_pos),
+    altos: acc.altos + Number(r.altos), medios: acc.medios + Number(r.medios),
+  }), { sigNeg: 0, sigPos: 0, altos: 0, medios: 0 });
+  out.push({
+    medio: "Total", sig_neg: fmt(tot.sigNeg), sig_pos: fmt(tot.sigPos),
+    balance: fmt(tot.sigPos - tot.sigNeg), altos: String(tot.altos), medios: String(tot.medios),
+  });
+  return out;
 }
 
 const SYSTEM_MATRICES_CAT =
@@ -949,20 +1122,43 @@ async function extraerMatrices({ sheet_url, datos }) {
 
   const resultadosTab = tabsCrudos.find((t) => /resultado/i.test(t.name));
   if (resultadosTab) {
-    const grupos = agruparMatrizResultados(resultadosTab.csv);
-    if (grupos) {
-      const balanceTab = tabsCrudos.find((t) => /balance/i.test(t.name));
-      const balanceCSV = balanceTab ? muestrearCSV(balanceTab.csv, 200) : "";
+    const filas = parseFilasMatrizResultados(resultadosTab.csv);
+    if (filas) {
+      // Tablas III.25/25b/26: aritmética determinista sobre lo que la hoja
+      // ya calculó — no cuesta una sola llamada IA extra ni puede fallar por
+      // timeout, así que se calculan siempre que la plantilla coincida.
+      const tablas = {
+        tablaImpactosResumen: calcularTablaResumen(filas),
+        tablaImpactosSignificativos: calcularTablaSignificativos(filas),
+        tablaImpactosBalance: calcularTablaBalance(filas),
+      };
+
+      const grupos = agruparNarrativaPorSubsistema(filas);
       const nombres = Object.keys(grupos);
-      const resultados = await Promise.all(
-        nombres.map((n) =>
-          narrarCategoriaMatriz(apiKey, datos, n, grupos[n], balanceCSV)
-            .catch((e) => { console.error(`[matrices] falló categoría ${n}:`, e.message); return null; })
-        )
-      );
-      const categorias = resultados.filter(Boolean);
-      if (categorias.length) return { categorias };
-      console.error("[matrices] todas las categorías fallaron en el camino optimizado — cae al genérico");
+      if (nombres.length) {
+        const balanceTab = tabsCrudos.find((t) => /balance/i.test(t.name));
+        const balanceCSV = balanceTab ? muestrearCSV(balanceTab.csv, 200) : "";
+        const resultados = await Promise.all(
+          nombres.map((n) =>
+            narrarCategoriaMatriz(apiKey, datos, n, grupos[n], balanceCSV)
+              .catch((e) => { console.error(`[matrices] falló categoría ${n}:`, e.message); return null; })
+          )
+        );
+        const categorias = resultados.filter(Boolean);
+        if (categorias.length) return { categorias, tablas };
+        console.error("[matrices] todas las categorías fallaron en el camino optimizado — cae al genérico");
+      }
+      // Sin categorías narrables (o todas fallaron): conserva igual las 3
+      // tablas ya calculadas y deja que el camino genérico intente la
+      // narrativa de todos modos; si hasta el genérico falla, las tablas
+      // calculadas igual valen la pena devolverlas.
+      try {
+        const generico = await extraerMatricesGenerico(tabsCrudos, datos);
+        return { ...generico, tablas };
+      } catch (e) {
+        console.error("[matrices] camino genérico también falló:", e.message);
+        return { categorias: [], tablas };
+      }
     }
   }
   return extraerMatricesGenerico(tabsCrudos, datos);

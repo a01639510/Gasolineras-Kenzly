@@ -450,7 +450,7 @@
       {id:"iaImpactos", l:"III.5.7/5.8 Descripción de impactos y balance — redacción con IA", tipo:"ia", seccion:"impactos", b:"abierta",
         nota:"Genera la narrativa de impactos altos/medios y el balance neto por medio con IA (Leopold/Gómez-Orea). Editable."},
       {id:"matrizImpactos", l:"III.5.7 Leer matriz de impactos (IA) — categorías dinámicas", tipo:"matrizImpactos", b:"abierta",
-        nota:"Pega el link de Google Sheets de las matrices (Leopold/Resultados/Balance, puede tener varias pestañas). La IA detecta las categorías de impacto presentes — sin lista fija — y redacta III.5.7 por categoría, cada una con su propio recuadro de figura. Reemplaza la narrativa genérica de arriba si la usas."},
+        nota:"Pega el link de Google Sheets de las matrices (Leopold/Resultados/Balance, puede tener varias pestañas). La IA redacta III.5.7 por categoría (cada una con su propio recuadro de figura) y llena automáticamente las Tablas III.25, III.25b y III.26 de abajo a partir de los índices ya calculados en la hoja. Reemplaza la narrativa genérica de arriba si la usas."},
       {id:"tablaImpactosResumen", l:"Tabla III.25 — Resumen de impactos por etapa", tipo:"susDinamica", b:"cerrada",
         nota:"Llenar después de completar la matriz de Leopold (figura f31). Valores: conteo de impactos por signo.",
         cols:[
@@ -817,9 +817,16 @@
             if(idx>=0 && e.disposicion){ state.estrategias[idx]={n:D.ESTRATEGIAS_POEGT[idx].n, d:e.disposicion}; nEstr++; }
           });
         });
+        // Si alguna pestaña se llamaba POEL/Plan Municipal, ya llegó también
+        // su tabla estructurada (tablaPOEL/tablaPlanMunicipal, II.2.4/II.3)
+        // — sin necesidad de un link ni un campo aparte.
+        const tablas=j.tablas||{};
+        let nTablas=0;
+        if(!state.tablas) state.tablas={};
+        Object.keys(tablas).forEach(k=>{ if(Array.isArray(tablas[k]) && tablas[k].length){ state.tablas[k]=tablas[k]; nTablas++; } });
         if(!state.anexos) state.anexos={}; state.anexos.programas=url.trim();
         save(); renderForm();
-        toast("✓ "+programas.length+" programa(s) agregados desde "+programas.length+" pestaña(s)"+(nEstr?` — ${nEstr} estrategias POEGT actualizadas`:""));
+        toast("✓ "+programas.length+" programa(s) agregados desde "+programas.length+" pestaña(s)"+(nEstr?` — ${nEstr} estrategias POEGT actualizadas`:"")+(nTablas?` — ${nTablas} tabla(s) II.3 llenadas (POEL/plan municipal)`:""));
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btnMulti.disabled=false; btnMulti.textContent=prevM; toast("Error al leer las pestañas: "+e.message); }
     };
 
@@ -973,11 +980,15 @@
         const j=await jsonOrError(r);
         if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
         const categorias=j.categorias||[];
-        if(!categorias.length){ throw new Error("La IA no detectó categorías en la matriz"); }
-        state.impactoCategorias=categorias;
+        const tablas=j.tablas||{};
+        let nTablas=0;
+        if(!categorias.length && !Object.keys(tablas).length){ throw new Error("La IA no detectó categorías ni tablas en la matriz"); }
+        if(categorias.length) state.impactoCategorias=categorias;
+        if(!state.tablas) state.tablas={};
+        Object.keys(tablas).forEach(k=>{ if(Array.isArray(tablas[k]) && tablas[k].length){ state.tablas[k]=tablas[k]; nTablas++; } });
         if(!state.anexos) state.anexos={}; state.anexos.matrices=url.trim();
         save(); renderForm();
-        toast("✓ "+categorias.length+" categoría(s) de impacto detectadas — revísalas en III.5.7");
+        toast("✓ "+(categorias.length?categorias.length+" categoría(s) en III.5.7":"")+(categorias.length&&nTablas?" + ":"")+(nTablas?nTablas+" tabla(s) III.25/25b/26 llenadas":"")+" — revisa III.5");
       }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error al leer la matriz: "+e.message); }
     };
   }
@@ -1113,13 +1124,14 @@
   // Campos tablaIA cuyo link de Google Sheets se sincroniza en vivo con el
   // clip (VI. Anexos) — mapa único usado por bindTablaIA(), ANEXO_FIELD_SEL y
   // el prefill del input (case "tablaIA"). Agregar un campo aquí basta para
-  // que quede sincronizado en ambos sentidos; antes había que tocar 3 puntos
-  // sueltos y era fácil olvidar alguno (pasó con tablaMunicipal/tablaMedidas).
+  // que quede sincronizado en ambos sentidos, sin tocar 3 puntos sueltos.
+  // tablaMunicipal/tablaMedidas NO están aquí a propósito: no hay un
+  // documento propio detrás de esos campos (tablaMunicipal se llena solo
+  // desde la pestaña POEL del Sheet de "programas"; tablaMedidas se llena a
+  // mano/imagen, sin un Sheet dedicado en el flujo real del cliente).
   const TABLAIA_ANEXO = {
-    tablaMunicipal: "plan_municipal",
     tablaFloraBib: "flora",
     tablaFaunaBib: "fauna",
-    tablaMedidas: "medidas",
   };
 
   // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
