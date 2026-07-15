@@ -446,6 +446,20 @@ async function llamarJSON(apiKey, system, content, maxTokens, etiqueta, model) {
   }
 }
 
+// Reintenta UNA vez ante un fallo transitorio (rate limit, red, respuesta
+// truncada por congestión) antes de darse por vencido. Usado en llamadas que
+// van muchas a la vez en paralelo (chunks de especies, categorías de la
+// matriz) — ahí un fallo aislado es más probable que en una llamada única, y
+// perder un pedazo obliga a rehacer todo el flujo desde la app.
+async function llamarJSONConReintento(apiKey, system, content, maxTokens, etiqueta, model) {
+  try {
+    return await llamarJSON(apiKey, system, content, maxTokens, etiqueta, model);
+  } catch (e) {
+    console.error(`[${etiqueta}] intento 1 falló (${e.message}) — reintentando…`);
+    return llamarJSON(apiKey, system, content, maxTokens, etiqueta + ":retry", model);
+  }
+}
+
 async function extraerPerfil({ campos, datos_crudos, imagen, sheet_url }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
@@ -761,23 +775,29 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
 
 // ── MODO "MATRICES" ─────────────────────────────────────────────────────────
 // La plantilla estándar de Matriz de Impacto (Leopold adaptada / Gómez-Orea)
-// trae 4 pestañas fijas: "Parámetros" (constantes del modelo — sin valor
-// narrativo), "Matriz Leopold" (matriz ancha M por acción×factor — redundante,
-// misma info que la siguiente en formato disperso), "Matriz de Resultados"
-// (formato largo: una fila por interacción, YA con ISIG/Clase/Subsistema
-// calculados por el Sheet) y "Balance y Criterios" (resumen agregado por
-// etapa/subsistema/clase, ~4 KB). Mandar las 4 pestañas completas (hasta
-// 113 KB solo en "Matriz de Resultados", recortadas a 20 000 caracteres —
-// perdiendo la mayoría de las filas) es lo que producía el timeout de 60 s.
+// suele traer varias pestañas ("Parámetros", "Matriz Leopold", "Matriz de
+// Resultados", "Balance y Criterios"...), pero SOLO "Matriz de Resultados"
+// aporta algo que la IA necesite: es formato largo (una fila por
+// interacción) YA con ISIG/Clase/Subsistema calculados por el propio Sheet.
+// El resto (Parámetros = constantes del modelo, Matriz Leopold = la misma
+// info en formato ancho/disperso, Balance = agregados que igual se calculan
+// aquí mismo sin IA) NO se lee — a propósito: entre menos pestañas entran al
+// flujo, menos puede fallar y menos tiempo/tokens se gastan. Mandar las
+// pestañas completas (hasta 113 KB solo en "Matriz de Resultados", recortadas
+// a 20 000 caracteres — perdiendo la mayoría de las filas) es lo que producía
+// el timeout de 60 s.
 //
-// Camino optimizado: se agrupan las filas de "Matriz de Resultados" por su
-// columna Subsistema (agrupación que la propia hoja ya trae calculada — no
-// hace falta pedirle a la IA que la "detecte"), filtrando a Clase != BAJO
-// (impactos altos y medios, que es lo único que pide III.5.7), y se lanza
-// UNA llamada IA en paralelo por categoría con solo sus filas relevantes +
-// el resumen de balance (pequeño) como contexto. Si la hoja no sigue la
-// plantilla esperada (no trae esas columnas), cae al camino genérico
-// anterior de una sola llamada con todo lo no descartable.
+// Camino optimizado (el único que se usa si la hoja sigue la plantilla): se
+// agrupan las filas de "Matriz de Resultados" por su columna Subsistema
+// (agrupación que la propia hoja ya trae calculada — no hace falta pedirle a
+// la IA que la "detecte"), filtrando a Clase != BAJO (impactos altos y
+// medios, que es lo único que pide III.5.7), y se lanza UNA llamada IA en
+// paralelo por categoría con solo sus filas relevantes. Las Tablas
+// III.25/25b/26 se calculan aparte, sin IA, sobre las mismas filas ya
+// parseadas (ver calcularTabla* más abajo). Si la hoja no sigue la
+// plantilla esperada (no se encuentra "Matriz de Resultados" con las
+// columnas Clase+Subsistema), cae al camino genérico de una sola llamada
+// con todo lo no descartable, dejando que la IA detecte las categorías.
 const TAB_DESCARTABLE = /instrucci|leyenda|par[aá]metro|^matriz\s*leopold$/i;
 
 const NOMBRE_SUBSISTEMA = {
@@ -1022,12 +1042,15 @@ const SYSTEM_MATRICES_CAT =
   "técnica. Escribe en español técnico formal, sin markdown, sin encabezados. No inventes impactos, " +
   "cifras ni normas que no estén en la fuente. Devuelve ÚNICAMENTE JSON válido.";
 
-// Redacta la narrativa de UNA categoría (subsistema); tablaCSV ya viene
-// filtrada a Clase != BAJO. Si tablaCSV excede ~180 filas se fragmenta con
+// Redacta la narrativa de UNA categoría (subsistema), leyendo ÚNICAMENTE
+// "Matriz de Resultados" (tablaCSV ya viene filtrada a Clase != BAJO de esa
+// misma pestaña — nada de Parámetros/Leopold/Balance: entre menos fuentes,
+// menos puede fallar). Si tablaCSV excede ~180 filas se fragmenta con
 // chunkCSV (mismo mecanismo que el listado de especies) y las llamadas se
 // disparan en paralelo — el tiempo total es el del fragmento más lento, no
-// la suma, para no volver a pegarle al techo de 60 s con proyectos grandes.
-async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV, balanceCSV) {
+// la suma. Cada llamada lleva 1 reintento automático (llamarJSONConReintento)
+// para no perder una categoría entera por un fallo transitorio aislado.
+async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV) {
   const nombre = NOMBRE_SUBSISTEMA[nombreCrudo] || nombreCrudo;
   const nFilas = tablaCSV.split("\n").length - 1;
 
@@ -1040,7 +1063,6 @@ async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV, balan
     "acción generadora, el factor ambiental receptor, si es adverso o benéfico, y — cuando la fuente lo " +
     "traiga — la medida de control y la norma aplicable. Agrupa impactos similares; no repitas fila por fila.\n\n" +
     `Impactos de esta categoría (ya filtrados a clase MEDIO o superior${totalCtx}):\n${bloque}` +
-    (balanceCSV ? `\n\nResumen agregado de balance (todas las categorías, contexto — no lo repitas como tabla):\n${balanceCSV}` : "") +
     "\n\nNunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su lugar; rompe el JSON.\n\n" +
     `Devuelve ÚNICAMENTE: { "nombre": "${nombre}", "narrativa": ["párrafo 1", "..."] }`;
 
@@ -1048,7 +1070,7 @@ async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV, balan
     const chunks = chunkCSV(tablaCSV, 150);
     const resultados = await Promise.all(
       chunks.map((chunk, idx) =>
-        llamarJSON(
+        llamarJSONConReintento(
           apiKey, SYSTEM_MATRICES_CAT,
           [{ type: "text", text: buildInstruccion(chunk, ` — parte ${idx + 1}/${chunks.length}`) }],
           2048, `matrices:${nombreCrudo}:${idx + 1}/${chunks.length}`, MODEL_HAIKU
@@ -1060,10 +1082,10 @@ async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV, balan
     return { nombre, narrativa };
   }
 
-  const parsed = await llamarJSON(
+  const parsed = await llamarJSONConReintento(
     apiKey, SYSTEM_MATRICES_CAT, [{ type: "text", text: buildInstruccion(tablaCSV, "") }],
     2048, `matrices:${nombreCrudo}`, MODEL_HAIKU
-  );
+  ).catch((e) => { console.error(`[matrices] falló ${nombreCrudo}:`, e.message); return null; });
   if (!parsed || !Array.isArray(parsed.narrativa) || !parsed.narrativa.length) return null;
   return { nombre: parsed.nombre || nombre, narrativa: parsed.narrativa };
 }
@@ -1136,14 +1158,28 @@ async function extraerMatrices({ sheet_url, datos }) {
       const grupos = agruparNarrativaPorSubsistema(filas);
       const nombres = Object.keys(grupos);
       if (nombres.length) {
-        const balanceTab = tabsCrudos.find((t) => /balance/i.test(t.name));
-        const balanceCSV = balanceTab ? muestrearCSV(balanceTab.csv, 200) : "";
-        const resultados = await Promise.all(
+        let resultados = await Promise.all(
           nombres.map((n) =>
-            narrarCategoriaMatriz(apiKey, datos, n, grupos[n], balanceCSV)
+            narrarCategoriaMatriz(apiKey, datos, n, grupos[n])
               .catch((e) => { console.error(`[matrices] falló categoría ${n}:`, e.message); return null; })
           )
         );
+        if (resultados.some((r) => !r) && resultados.some(Boolean)) {
+          // Reintenta SOLO los índices que fallaron (una vez más) antes de
+          // darlos por perdidos — evita quedarse con menos de las 3
+          // categorías esperadas (Abiótico/Biótico/Socioeconómico) por un
+          // fallo aislado y transitorio de una sola llamada. Se identifica
+          // por ÍNDICE, no por el texto de "nombre" que devuelva la IA (que
+          // puede variar levemente respecto al que se le pidió).
+          const faltantes = nombres.map((n, i) => (resultados[i] ? null : i)).filter((i) => i !== null);
+          const reintentos = await Promise.all(
+            faltantes.map((i) =>
+              narrarCategoriaMatriz(apiKey, datos, nombres[i], grupos[nombres[i]])
+                .catch((e) => { console.error(`[matrices] categoría ${nombres[i]} falló también en el reintento:`, e.message); return null; })
+            )
+          );
+          faltantes.forEach((i, j) => { resultados[i] = reintentos[j]; });
+        }
         const categorias = resultados.filter(Boolean);
         if (categorias.length) return { categorias, tablas };
         console.error("[matrices] todas las categorías fallaron en el camino optimizado — cae al genérico");
@@ -1570,28 +1606,41 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
     `pulgadas) dentro de ningún valor, escribe 'pulg' en su lugar — rompe el JSON.` +
     (fuenteBloque ? `\n\nDatos crudos:\n${fuenteBloque}` : "");
 
-  // Camino fragmentado: un listado de especies grande puede necesitar más
-  // filas de salida de las que caben en una sola respuesta (max_tokens) y
-  // tardar más de los 60s de Vercel Hobby si se pide de un jalón. Se
-  // fragmenta en pedazos chicos y se disparan TODOS en paralelo — el tiempo
-  // total pasa a ser el del pedazo más lento, no la suma de todos.
-  const FILAS_POR_CHUNK = 150;
+  // Ejecuta chunks de un CSV en paralelo (con 1 reintento cada uno) y
+  // combina los resultados por tabla — mismo mecanismo para (a) listados de
+  // especies (clasificación NOM-059, necesita el criterio amplio de Sonnet)
+  // y (b) cualquier otra tabla grande pegada directa o venida de una
+  // pestaña de Sheet (ej. POEL con muchas UGAs) — antes SOLO el camino (a)
+  // fragmentaba, así que una pestaña/pegado grande sin ser un listado de
+  // especies se mandaba de un jalón y se cortaba por max_tokens ("la
+  // respuesta se cortó por límite de longitud (demasiadas filas)").
+  async function procesarEnChunks(csv, filasPorChunk, model, etiqueta, prefijoBloque, contextoExtra) {
+    const chunks = chunkCSV(csv, filasPorChunk);
+    const resultados = await Promise.all(
+      chunks.map((chunk, idx) => {
+        const bloque = (contextoExtra ? contextoExtra + "\n\n" : "") + `=== ${prefijoBloque} (parte ${idx + 1}/${chunks.length}) ===\n${chunk}`;
+        return llamarJSONConReintento(apiKey, SYSTEM_TABLA, [{ type: "text", text: buildInstruccion(bloque) }], 8192, `${etiqueta}:${idx + 1}/${chunks.length}`, model)
+          .catch((e) => { console.error(`[tabla] falló ${etiqueta} parte ${idx + 1}/${chunks.length}:`, e.message); return null; });
+      })
+    );
+    const combinado = {};
+    tablas.forEach((t) => { combinado[t.key] = []; });
+    resultados.forEach((r) => {
+      if (!r) return;
+      tablas.forEach((t) => { if (Array.isArray(r[t.key])) combinado[t.key].push(...r[t.key]); });
+    });
+    return combinado;
+  }
+
+  // Listados de especies: chunks chicos (40) porque cada fila exige que el
+  // modelo razone la clasificación NOM-059 (no es extracción mecánica) —
+  // pedazos grandes tardaban más de los 60s de Vercel Hobby aun en
+  // paralelo, porque cada llamada individual ya se pasaba del límite.
+  const FILAS_POR_CHUNK_ESPECIES = 40;
   if (esListaEspecies) {
-    const chunks = chunkCSV(especiesCSV, FILAS_POR_CHUNK);
-    if (chunks.length > 1) {
-      const resultados = await Promise.all(
-        chunks.map((chunk, idx) => {
-          const bloque = (fuente ? fuente + "\n\n" : "") + `=== Especies (parte ${idx + 1}/${chunks.length}) ===\n${chunk}`;
-          return llamarJSON(apiKey, SYSTEM_TABLA, [{ type: "text", text: buildInstruccion(bloque) }], 8192, `tabla:especies:${idx + 1}/${chunks.length}`, modelTabla)
-            .catch((e) => { console.error(`[tabla] falló chunk de especies ${idx + 1}/${chunks.length}:`, e.message); return null; });
-        })
-      );
-      const combinado = {};
-      tablas.forEach((t) => { combinado[t.key] = []; });
-      resultados.forEach((r) => {
-        if (!r) return;
-        tablas.forEach((t) => { if (Array.isArray(r[t.key])) combinado[t.key].push(...r[t.key]); });
-      });
+    const nEspecies = especiesCSV.split("\n").length - 1;
+    if (nEspecies > FILAS_POR_CHUNK_ESPECIES) {
+      const combinado = await procesarEnChunks(especiesCSV, FILAS_POR_CHUNK_ESPECIES, modelTabla, "tabla:especies", "Especies", fuente);
       if (!Object.values(combinado).some((arr) => arr.length)) {
         throw new Error(`La IA no pudo procesar el listado de ${especiesTotal} especies. Intenta de nuevo.`);
       }
@@ -1599,6 +1648,19 @@ async function estructurarTabla({ tablas, datos_crudos, imagen, sheet_url }) {
     }
     // Pocas especies (cabe en 1 sola llamada): sigue el camino normal de abajo.
     fuente += (fuente ? "\n\n" : "") + `=== Especies ===\n${especiesCSV}`;
+  } else {
+    // Tabla no-especie (mecánica): si trae muchas filas (ej. POEL con
+    // decenas/cientos de UGAs), fragmenta igual con chunks más grandes
+    // (Haiku es rápido y esto no requiere razonamiento por fila).
+    const FILAS_POR_CHUNK_TABLA = 60;
+    const nLineasFuente = fuente ? fuente.split(/\r?\n/).filter((l) => l.trim()).length - 1 : 0;
+    if (nLineasFuente > FILAS_POR_CHUNK_TABLA) {
+      const combinado = await procesarEnChunks(fuente, FILAS_POR_CHUNK_TABLA, modelTabla, "tabla:fragmento", "Datos");
+      if (!Object.values(combinado).some((arr) => arr.length)) {
+        throw new Error(`La IA no pudo procesar la tabla (${nLineasFuente} filas). Intenta de nuevo.`);
+      }
+      return { tablas: combinado };
+    }
   }
 
   const instruccion = buildInstruccion(fuente);
