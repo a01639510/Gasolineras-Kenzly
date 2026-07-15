@@ -138,7 +138,7 @@
 
   // ---- Referencias / Anexos: documentos requeridos por el IP -----------
   // link = enlace por defecto (editable por proyecto desde la app).
-  // Catálogo podado a los 9 docs con automatización real por IA — cada uno
+  // Catálogo podado a los 11 docs con automatización real por IA — cada uno
   // sincronizado en 2 vías con su input correspondiente en el cuestionario
   // (ver app.js: pegar el link aquí lo refleja en la sección, y viceversa).
   D.ANEXOS_DOCS = [
@@ -146,12 +146,16 @@
       link:"https://drive.google.com/open?id=1PfFwTI09Vg41ktwA6kQ3nxoDQha7SXjK", usa:"Sección I, datos del proyecto" },
     { id:"programas", nombre:"Programas de Ordenamiento Ecológico (POEGT/POEL/PDUM…)", tipo:"Excel/Sheet",
       link:"", usa:"II.2 ordenamiento ecológico" },
+    { id:"plan_municipal", nombre:"PLAN MUNICIPAL DE DESARROLLO Y POEL (criterios + UGA)", tipo:"Excel/Sheet",
+      link:"", usa:"II.2.4 / II.3 plan municipal y parque industrial" },
     { id:"flora", nombre:"BASE DE DATOS FLORA", tipo:"Excel/Sheet",
       link:"https://docs.google.com/spreadsheets/d/1aXOp1LPtix-SwhPqSn90WC9xuvL7Jupsws3L3xpUI0E/edit?gid=1477371895#gid=1477371895", usa:"III.4.3 flora (NOM-059)" },
     { id:"fauna", nombre:"BASE DE DATOS FAUNA", tipo:"Excel/Sheet",
       link:"https://docs.google.com/spreadsheets/d/1qVNd6aHM0oE5Rn4iaAFNpiayNi-l7cvcQ9p3CRCB1Bk/edit?gid=235775844#gid=235775844", usa:"III.4.3 fauna (NOM-059)" },
     { id:"matrices", nombre:"MATRICES DE IMPACTO (Leopold / Gómez-Orea)", tipo:"Excel/Sheet",
       link:"", usa:"III.5 identificación y evaluación de impactos" },
+    { id:"medidas", nombre:"IMPACTOS Y MEDIDAS DE MITIGACIÓN (III.27–III.30)", tipo:"Excel/Sheet",
+      link:"", usa:"III.6 / III.7 medidas y vigilancia" },
     { id:"cumplimiento", nombre:"CUMPLIMIENTO REGULATORIO DEL PROYECTO", tipo:"Excel/Sheet",
       link:"https://drive.google.com/open?id=1afzzWG2-idfNBdeFTbT2m_8LT5MDmSc5", usa:"II.1 fundamento jurídico" },
     { id:"noms", nombre:"BASE DE DATOS NOMs 2025 (marco legislativo)", tipo:"Excel/Sheet",

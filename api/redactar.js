@@ -722,11 +722,184 @@ async function extraerProgramasMulti({ sheet_url, datos }) {
 }
 
 // ── MODO "MATRICES" ─────────────────────────────────────────────────────────
-// Lee el Sheet de matrices de impacto (Parámetros/Matriz Leopold/Matriz de
-// Resultados/Balance, en varias pestañas) y deja que la IA DETECTE las
-// categorías de impacto presentes (sin lista fija — puede ser por medio
-// ambiental, por etapa, o como esté agrupada la matriz) para redactar III.5.7
-// por categoría; cada categoría se despliega con su propio recuadro de figura.
+// La plantilla estándar de Matriz de Impacto (Leopold adaptada / Gómez-Orea)
+// trae 4 pestañas fijas: "Parámetros" (constantes del modelo — sin valor
+// narrativo), "Matriz Leopold" (matriz ancha M por acción×factor — redundante,
+// misma info que la siguiente en formato disperso), "Matriz de Resultados"
+// (formato largo: una fila por interacción, YA con ISIG/Clase/Subsistema
+// calculados por el Sheet) y "Balance y Criterios" (resumen agregado por
+// etapa/subsistema/clase, ~4 KB). Mandar las 4 pestañas completas (hasta
+// 113 KB solo en "Matriz de Resultados", recortadas a 20 000 caracteres —
+// perdiendo la mayoría de las filas) es lo que producía el timeout de 60 s.
+//
+// Camino optimizado: se agrupan las filas de "Matriz de Resultados" por su
+// columna Subsistema (agrupación que la propia hoja ya trae calculada — no
+// hace falta pedirle a la IA que la "detecte"), filtrando a Clase != BAJO
+// (impactos altos y medios, que es lo único que pide III.5.7), y se lanza
+// UNA llamada IA en paralelo por categoría con solo sus filas relevantes +
+// el resumen de balance (pequeño) como contexto. Si la hoja no sigue la
+// plantilla esperada (no trae esas columnas), cae al camino genérico
+// anterior de una sola llamada con todo lo no descartable.
+const TAB_DESCARTABLE = /instrucci|leyenda|par[aá]metro|^matriz\s*leopold$/i;
+
+const NOMBRE_SUBSISTEMA = {
+  "ABIÓTICO": "Medio físico (abiótico)",
+  ABIOTICO: "Medio físico (abiótico)",
+  "BIÓTICO": "Medio biótico",
+  BIOTICO: "Medio biótico",
+  "SOCIOECON.": "Medio socioeconómico",
+  SOCIOECON: "Medio socioeconómico",
+  "SOCIOECONÓMICO": "Medio socioeconómico",
+};
+const ORDEN_SUBSISTEMA = ["ABIÓTICO", "ABIOTICO", "BIÓTICO", "BIOTICO", "SOCIOECON.", "SOCIOECON", "SOCIOECONÓMICO"];
+
+function detectarColumna(header, patrones) {
+  for (const pat of patrones) {
+    const i = header.findIndex((h) => pat.test(h));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+// Parsea un CSV completo respetando comillas, INCLUYENDO saltos de línea
+// embebidos dentro de una celda (común en encabezados de dos líneas de
+// Sheets exportados, ej. "Cód.\nAcción") — a diferencia de split("\n") +
+// parseCSVLine (usado para listados simples de una línea por fila), esto es
+// indispensable para no desalinear columnas en hojas con encabezados así.
+function parseCSVRows(text) {
+  const rows = [];
+  let row = [], cur = "", inQ = false;
+  const s = String(text);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQ) {
+      if (c === '"') { if (s[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { row.push(cur); cur = ""; }
+    else if (c === "\r") { /* ignora */ }
+    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+    else cur += c;
+  }
+  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+// Agrupa las filas de la pestaña "Matriz de Resultados" por Subsistema,
+// filtrando a Clase != BAJO. Devuelve { nombreSubsistema: csvCompacto } con
+// solo las columnas relevantes para narrar (nada de M/E/D/R/P/A/S/III/IB/C/IC
+// crudos: esos son insumos de la fórmula, no algo que el texto deba citar).
+// Devuelve null si la hoja no trae Clase+Subsistema (plantilla distinta) para
+// que el llamador caiga al camino genérico.
+function agruparMatrizResultados(csv) {
+  const filas = parseCSVRows(csv).filter((r) => r.some((c) => c.trim()));
+  if (filas.length < 2) return null;
+  const headerIdx = filas.findIndex((r) => r.some((c) => /^etapa$/i.test(c.trim())));
+  if (headerIdx < 0) return null;
+  const header = filas[headerIdx].map((h) => h.replace(/\s+/g, " ").trim());
+
+  const idx = {
+    etapa: detectarColumna(header, [/^etapa$/i]),
+    accion: detectarColumna(header, [/acci[oó]n del proyecto/i, /^acci[oó]n$/i]),
+    factor: detectarColumna(header, [/factor ambiental/i]),
+    atributo: detectarColumna(header, [/atributo/i]),
+    isig: detectarColumna(header, [/isig.*signad/i, /isig/i]),
+    clase: detectarColumna(header, [/^clase/i]),
+    medida: detectarColumna(header, [/medida/i]),
+    norma: detectarColumna(header, [/nom\b|normativ/i]),
+    plazo: detectarColumna(header, [/plazo|duraci[oó]n/i]),
+    subsistema: detectarColumna(header, [/subsistema/i]),
+  };
+  if (idx.clase < 0 || idx.subsistema < 0) return null;
+
+  const cols = [
+    ["etapa", "Etapa"], ["accion", "Acción"], ["factor", "Factor ambiental"],
+    ["atributo", "Atributo del impacto"], ["isig", "ISIG (signo indica adverso/benéfico)"],
+    ["clase", "Clase"], ["medida", "Medida de control"], ["norma", "NOM/normativa"], ["plazo", "Plazo"],
+  ].filter(([k]) => idx[k] >= 0);
+  const cabecera = cols.map(([, l]) => l).join(",");
+
+  const grupos = {};
+  for (let i = headerIdx + 1; i < filas.length; i++) {
+    const r = filas[i];
+    const clase = (r[idx.clase] || "").trim();
+    const sub = (r[idx.subsistema] || "").trim();
+    if (!clase || !sub || /^bajo$/i.test(clase)) continue; // solo altos y medios
+    // Colapsa saltos de línea embebidos en la celda (raro, pero posible en
+    // "Medida"/"Norma" con formato manual) — chunkCSV()/el conteo de filas
+    // más abajo asumen una fila = una línea.
+    const fila = cols.map(([k]) => `"${(r[idx[k]] || "").replace(/\s*[\r\n]+\s*/g, " ").trim().replace(/"/g, "'")}"`).join(",");
+    (grupos[sub] = grupos[sub] || [cabecera]).push(fila);
+  }
+  const nombres = Object.keys(grupos);
+  if (!nombres.length) return null;
+  nombres.sort((a, b) => {
+    const ia = ORDEN_SUBSISTEMA.indexOf(a), ib = ORDEN_SUBSISTEMA.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const salida = {};
+  nombres.forEach((n) => { salida[n] = grupos[n].join("\n"); });
+  return salida;
+}
+
+const SYSTEM_MATRICES_CAT =
+  "Eres un consultor ambiental senior especializado en evaluación de impacto ambiental (metodología " +
+  "Leopold adaptada + índices Gómez-Orea) para Informes Preventivos ASEA. Lees una tabla de impactos " +
+  "YA calculados (ISIG, clase) para UNA sola categoría del medio ambiental y redactas su descripción " +
+  "técnica. Escribe en español técnico formal, sin markdown, sin encabezados. No inventes impactos, " +
+  "cifras ni normas que no estén en la fuente. Devuelve ÚNICAMENTE JSON válido.";
+
+// Redacta la narrativa de UNA categoría (subsistema); tablaCSV ya viene
+// filtrada a Clase != BAJO. Si tablaCSV excede ~180 filas se fragmenta con
+// chunkCSV (mismo mecanismo que el listado de especies) y las llamadas se
+// disparan en paralelo — el tiempo total es el del fragmento más lento, no
+// la suma, para no volver a pegarle al techo de 60 s con proyectos grandes.
+async function narrarCategoriaMatriz(apiKey, datos, nombreCrudo, tablaCSV, balanceCSV) {
+  const nombre = NOMBRE_SUBSISTEMA[nombreCrudo] || nombreCrudo;
+  const nFilas = tablaCSV.split("\n").length - 1;
+
+  const buildInstruccion = (bloque, totalCtx) =>
+    `${ctx(datos || {})}\n\n` +
+    `Redacta la descripción narrativa de los impactos ambientales de la categoría "${nombre}" para el ` +
+    "apartado III.5.7 del Informe Preventivo, en 1 a 3 párrafos de prosa continua (un string por " +
+    "párrafo, sin saltos de línea internos, sin markdown). Prioriza los impactos de mayor ISIG (clase " +
+    "MEDIO-ALTO y ALTO primero, luego MEDIO y BAJO-MEDIO); para cada impacto relevante menciona la " +
+    "acción generadora, el factor ambiental receptor, si es adverso o benéfico, y — cuando la fuente lo " +
+    "traiga — la medida de control y la norma aplicable. Agrupa impactos similares; no repitas fila por fila.\n\n" +
+    `Impactos de esta categoría (ya filtrados a clase MEDIO o superior${totalCtx}):\n${bloque}` +
+    (balanceCSV ? `\n\nResumen agregado de balance (todas las categorías, contexto — no lo repitas como tabla):\n${balanceCSV}` : "") +
+    "\n\nNunca uses el símbolo \" (comillas de pulgadas) dentro de ningún valor — escribe 'pulg' en su lugar; rompe el JSON.\n\n" +
+    `Devuelve ÚNICAMENTE: { "nombre": "${nombre}", "narrativa": ["párrafo 1", "..."] }`;
+
+  if (nFilas > 180) {
+    const chunks = chunkCSV(tablaCSV, 150);
+    const resultados = await Promise.all(
+      chunks.map((chunk, idx) =>
+        llamarJSON(
+          apiKey, SYSTEM_MATRICES_CAT,
+          [{ type: "text", text: buildInstruccion(chunk, ` — parte ${idx + 1}/${chunks.length}`) }],
+          2048, `matrices:${nombreCrudo}:${idx + 1}/${chunks.length}`, MODEL_HAIKU
+        ).catch((e) => { console.error(`[matrices] falló ${nombreCrudo} parte ${idx + 1}:`, e.message); return null; })
+      )
+    );
+    const narrativa = resultados.filter(Boolean).flatMap((r) => (Array.isArray(r.narrativa) ? r.narrativa : []));
+    if (!narrativa.length) return null;
+    return { nombre, narrativa };
+  }
+
+  const parsed = await llamarJSON(
+    apiKey, SYSTEM_MATRICES_CAT, [{ type: "text", text: buildInstruccion(tablaCSV, "") }],
+    2048, `matrices:${nombreCrudo}`, MODEL_HAIKU
+  );
+  if (!parsed || !Array.isArray(parsed.narrativa) || !parsed.narrativa.length) return null;
+  return { nombre: parsed.nombre || nombre, narrativa: parsed.narrativa };
+}
+
+// ── Camino genérico (fallback) ──────────────────────────────────────────────
+// Se usa solo si la hoja no sigue la plantilla esperada (no se detectó una
+// pestaña "Matriz de Resultados" con columnas Clase+Subsistema): se manda
+// todo lo no descartable en una sola llamada, dejando que la IA detecte las
+// categorías — comportamiento anterior, conservado como red de seguridad.
 const SYSTEM_MATRICES =
   "Eres un consultor ambiental senior especializado en evaluación de impacto ambiental (metodología " +
   "Leopold adaptada + índices Gómez-Orea) para Informes Preventivos ASEA. Lees hojas de cálculo con " +
@@ -734,20 +907,9 @@ const SYSTEM_MATRICES =
   "español técnico formal, sin markdown, sin encabezados. No inventes cifras: básate únicamente en los " +
   "datos de la matriz; si un dato no es determinable, dilo en prosa. Devuelve ÚNICAMENTE JSON válido.";
 
-async function extraerMatrices({ sheet_url, datos }) {
+async function extraerMatricesGenerico(tabsCrudos, datos) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
-  if (!sheet_url) throw new Error("Pega el link de Google Sheets de las matrices de impacto.");
-
-  const tabsCrudos = await fetchSheetTabs(sheet_url);
-  if (!tabsCrudos.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
-  // Pestañas de instrucciones/leyenda (texto para humanos, no datos de la
-  // matriz) no aportan nada al análisis — se descartan antes de gastar
-  // tokens en ellas.
-  const tabs = tabsCrudos.filter((t) => !/instrucci|leyenda/i.test(t.name));
-
-  // La Matriz de Resultados puede traer cientos de filas; se recorta por
-  // pestaña para no disparar el tamaño/tiempo/costo de la llamada.
+  const tabs = tabsCrudos.filter((t) => !TAB_DESCARTABLE.test(t.name));
   const MAX_CHARS = 20000;
   const fuente = tabs
     .map((t) => {
@@ -775,6 +937,35 @@ async function extraerMatrices({ sheet_url, datos }) {
   const categorias = Array.isArray(parsed.categorias) ? parsed.categorias.filter((c) => c && c.nombre) : [];
   if (!categorias.length) throw new Error("La IA no detectó categorías de impacto en la matriz.");
   return { categorias };
+}
+
+async function extraerMatrices({ sheet_url, datos }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+  if (!sheet_url) throw new Error("Pega el link de Google Sheets de las matrices de impacto.");
+
+  const tabsCrudos = await fetchSheetTabs(sheet_url);
+  if (!tabsCrudos.length) throw new Error("No se pudo leer ninguna pestaña de ese Sheet (¿es público?).");
+
+  const resultadosTab = tabsCrudos.find((t) => /resultado/i.test(t.name));
+  if (resultadosTab) {
+    const grupos = agruparMatrizResultados(resultadosTab.csv);
+    if (grupos) {
+      const balanceTab = tabsCrudos.find((t) => /balance/i.test(t.name));
+      const balanceCSV = balanceTab ? muestrearCSV(balanceTab.csv, 200) : "";
+      const nombres = Object.keys(grupos);
+      const resultados = await Promise.all(
+        nombres.map((n) =>
+          narrarCategoriaMatriz(apiKey, datos, n, grupos[n], balanceCSV)
+            .catch((e) => { console.error(`[matrices] falló categoría ${n}:`, e.message); return null; })
+        )
+      );
+      const categorias = resultados.filter(Boolean);
+      if (categorias.length) return { categorias };
+      console.error("[matrices] todas las categorías fallaron en el camino optimizado — cae al genérico");
+    }
+  }
+  return extraerMatricesGenerico(tabsCrudos, datos);
 }
 
 // ── MODO "RECEPTORES" ───────────────────────────────────────────────────────

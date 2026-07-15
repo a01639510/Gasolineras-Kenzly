@@ -1110,16 +1110,27 @@
     };
   }
 
+  // Campos tablaIA cuyo link de Google Sheets se sincroniza en vivo con el
+  // clip (VI. Anexos) — mapa único usado por bindTablaIA(), ANEXO_FIELD_SEL y
+  // el prefill del input (case "tablaIA"). Agregar un campo aquí basta para
+  // que quede sincronizado en ambos sentidos; antes había que tocar 3 puntos
+  // sueltos y era fácil olvidar alguno (pasó con tablaMunicipal/tablaMedidas).
+  const TABLAIA_ANEXO = {
+    tablaMunicipal: "plan_municipal",
+    tablaFloraBib: "flora",
+    tablaFaunaBib: "fauna",
+    tablaMedidas: "medidas",
+  };
+
   // Pegar datos/imagen → IA estructura filas (sin límite) → tablas del documento.
   function bindTablaIA(){
     document.querySelectorAll("input[type=file][data-timg]").forEach(inp=>{
       inp.onchange=()=>{ const f=inp.files[0]; const lbl=document.querySelector('[data-tdimg-name="'+inp.dataset.timg+'"]'); if(lbl) lbl.textContent=f?("📷 "+f.name):""; };
     });
-    // tablaFloraBib / tablaFaunaBib son los campos tablaIA sincronizados con el clip.
-    const floraUrlInp=document.querySelector('[data-turl="tablaFloraBib"]');
-    if(floraUrlInp) floraUrlInp.oninput=()=> syncAnexoLink("flora", floraUrlInp.value);
-    const faunaUrlInp=document.querySelector('[data-turl="tablaFaunaBib"]');
-    if(faunaUrlInp) faunaUrlInp.oninput=()=> syncAnexoLink("fauna", faunaUrlInp.value);
+    Object.keys(TABLAIA_ANEXO).forEach(fid=>{
+      const inp=document.querySelector('[data-turl="'+fid+'"]');
+      if(inp) inp.oninput=()=> syncAnexoLink(TABLAIA_ANEXO[fid], inp.value);
+    });
     document.querySelectorAll("[data-tbtn]").forEach(btn=>{
       btn.onclick=async()=>{
         const fid=btn.dataset.tbtn, field=findField(fid); if(!field) return;
@@ -1137,11 +1148,11 @@
           if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
           if(!state.tablas) state.tablas={};
           Object.keys(j.tablas||{}).forEach(k=>{ if(Array.isArray(j.tablas[k])) state.tablas[k]=j.tablas[k]; });
-          // tablaFloraBib / tablaFaunaBib se sincronizan con el clip (VI. Anexos).
-          if(fid==="tablaFloraBib" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.flora=sheet_url; }
-          if(fid==="tablaFaunaBib" && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos.fauna=sheet_url; }
+          // Sincroniza con el clip (VI. Anexos) cualquier campo tablaIA mapeado.
+          const axId=TABLAIA_ANEXO[fid];
+          if(axId && sheet_url){ if(!state.anexos) state.anexos={}; state.anexos[axId]=sheet_url; }
           save(); renderForm();
-          toast("Tablas estructuradas ✓ — revisa el documento (III.4.3)");
+          toast("Tablas estructuradas ✓ — revisa el documento");
         }catch(e){ if(status) status.textContent=" Error: "+e.message; btn.disabled=false; btn.textContent=prev; toast("Error IA: "+e.message); }
       };
     });
@@ -1186,14 +1197,15 @@
   const ANEXO_FIELD_SEL = {
     recopilacion: "[data-imp-url]",
     programas: "[data-prog-multi-url]",
-    flora: '[data-turl="tablaFloraBib"]',
-    fauna: '[data-turl="tablaFaunaBib"]',
     matrices: "[data-matriz-url]",
     cumplimiento: "[data-cumplimiento-url]",
     noms: "[data-normativo-url]",
     receptores: "[data-receptores-url]",
     vigencias: "[data-vigencias-url]",
   };
+  // Agrega, derivado de TABLAIA_ANEXO, un selector por cada campo tablaIA
+  // sincronizado (flora, fauna, plan_municipal, medidas, …) sin repetirlos a mano.
+  Object.keys(TABLAIA_ANEXO).forEach(fid=>{ ANEXO_FIELD_SEL[TABLAIA_ANEXO[fid]] = '[data-turl="'+fid+'"]'; });
   function syncAnexoLink(id, value){
     if(!state.anexos) state.anexos={};
     state.anexos[id]=value;
@@ -1399,9 +1411,9 @@
       case "tablaIA": {
         const t=state.tablas||{};
         const resumen=(f.tablas||[]).map(x=>`${x.titulo}: <b>${(t[x.key]||[]).length}</b> filas`).join(" · ");
-        // tablaFloraBib/tablaFaunaBib se sincronizan con sus docs "flora"/"fauna" del clip (VI. Anexos).
-        const urlPrefill = f.id==="tablaFloraBib" ? (state.anexos && state.anexos.flora || "")
-          : f.id==="tablaFaunaBib" ? (state.anexos && state.anexos.fauna || "") : "";
+        // Campos mapeados en TABLAIA_ANEXO se precargan con el link guardado en el clip (VI. Anexos).
+        const axId=TABLAIA_ANEXO[f.id];
+        const urlPrefill = axId ? ((state.anexos && state.anexos[axId]) || "") : "";
         return `<div class="field"><label>${esc(f.l)} ${badge(f.b)}</label><div class="open-note">${esc(f.nota||"")}</div>`+
           `<input data-turl="${f.id}" value="${esc(urlPrefill)}" placeholder="(Opcional) Link de Google Sheets con los datos" style="margin-bottom:6px">`+
           `<textarea data-tdraw="${f.id}" placeholder="Pega aquí el listado / los datos crudos (texto)…" style="min-height:90px"></textarea>`+
